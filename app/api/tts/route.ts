@@ -4,10 +4,10 @@ import { GoogleGenAI } from "@google/genai";
 export const runtime = "nodejs";
 export const preferredRegion = "hkg1";
 
-// Adrian: Charon — confident, clear male
+// Adrian: Puck — upbeat, younger-sounding male
 // Martha: Aoede — warm, expressive female
 const PERSONA_VOICES: Record<string, string> = {
-  adrian: "Charon",
+  adrian: "Puck",
   martha: "Aoede",
 };
 
