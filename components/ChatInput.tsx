@@ -11,6 +11,7 @@ interface ChatInputProps {
   isListening?: boolean;
   interimTranscript?: string;
   isSpeechSupported?: boolean;
+  sttHint?: string;
   onStartListening?: () => void;
   onStopListening?: () => void;
 }
@@ -23,6 +24,7 @@ export default function ChatInput({
   isListening = false,
   interimTranscript = "",
   isSpeechSupported = false,
+  sttHint,
   onStartListening,
   onStopListening,
 }: ChatInputProps) {
@@ -68,7 +70,7 @@ export default function ChatInput({
             className="h-2 w-2 animate-pulse rounded-full"
             style={{ backgroundColor: persona.accentHex }}
           />
-          Listening — English or Cantonese
+          {sttHint ?? "Listening — you can pause up to 5s"}
         </div>
       )}
 
@@ -79,10 +81,10 @@ export default function ChatInput({
             onClick={() =>
               isListening ? onStopListening?.() : onStartListening?.()
             }
-            disabled={disabled}
+            disabled={disabled && !isListening}
             className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-all disabled:opacity-40 ${
               isListening
-                ? "border-transparent text-white shadow-md"
+                ? "border-transparent text-white shadow-md animate-pulse"
                 : "border-white/80 bg-white/90 text-slate-600 hover:bg-white"
             }`}
             style={

@@ -13,11 +13,12 @@ interface ChatWindowProps {
   isStreaming: boolean;
   streamingContent: string;
   isSpeaking: boolean;
+  speakingMessageId: string | null;
   voiceMode: boolean;
   voiceError: string | null;
   langMode: LangMode;
   onSend: (message: string) => void;
-  onSpeakMessage: (content: string, personaId: string) => void;
+  onReplay: (message: Message) => void;
   onToggleVoiceMode: () => void;
   onSetLangMode: (mode: LangMode) => void;
   onStopSpeaking: () => void;
@@ -53,11 +54,12 @@ export default function ChatWindow({
   isStreaming,
   streamingContent,
   isSpeaking,
+  speakingMessageId,
   voiceMode,
   voiceError,
   langMode,
   onSend,
-  onSpeakMessage,
+  onReplay,
   onToggleVoiceMode,
   onSetLangMode,
   onStopSpeaking,
@@ -72,6 +74,13 @@ export default function ChatWindow({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent, isStreaming]);
+
+  const sttHint =
+    langMode === "cantonese"
+      ? "Mic listens in Cantonese (粵)"
+      : langMode === "english"
+        ? "Mic listens in English"
+        : "Mic: tap 粵 or EN to pick voice language";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -100,29 +109,44 @@ export default function ChatWindow({
           <p className="text-xs text-slate-500">
             {isSpeaking
               ? "Speaking…"
-              : isStreaming
-                ? "Thinking…"
-                : persona.tagline}
+              : isListening
+                ? "Listening…"
+                : isStreaming
+                  ? "Thinking…"
+                  : persona.tagline}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Language toggle: neither active = auto (mirrors user's language) */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <div className="flex overflow-hidden rounded-full border border-white/80 bg-white/70">
-            {(["cantonese", "english"] as Exclude<LangMode, "auto">[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => onSetLangMode(langMode === mode ? "auto" : mode)}
-                className={`px-2.5 py-1.5 text-xs font-medium transition ${
-                  langMode === mode ? "text-white" : "text-slate-500 hover:bg-white/60"
-                }`}
-                style={langMode === mode ? { backgroundColor: persona.accentHex } : undefined}
-                title={mode === "cantonese" ? "Force Cantonese replies" : "Force English replies"}
-              >
-                {mode === "cantonese" ? "粵" : "EN"}
-              </button>
-            ))}
+            {(["cantonese", "english"] as Exclude<LangMode, "auto">[]).map(
+              (mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() =>
+                    onSetLangMode(langMode === mode ? "auto" : mode)
+                  }
+                  className={`px-2.5 py-1.5 text-xs font-medium transition ${
+                    langMode === mode
+                      ? "text-white"
+                      : "text-slate-500 hover:bg-white/60"
+                  }`}
+                  style={
+                    langMode === mode
+                      ? { backgroundColor: persona.accentHex }
+                      : undefined
+                  }
+                  title={
+                    mode === "cantonese"
+                      ? "Cantonese — replies & mic"
+                      : "English — replies & mic"
+                  }
+                >
+                  {mode === "cantonese" ? "粵" : "EN"}
+                </button>
+              )
+            )}
           </div>
 
           {isSpeaking && (
@@ -159,11 +183,6 @@ export default function ChatWindow({
             Voice
           </button>
         </div>
-
-        <div
-          className="hidden h-8 w-1 rounded-full sm:block"
-          style={{ backgroundColor: persona.accentHex }}
-        />
       </header>
 
       {voiceError && (
@@ -180,8 +199,8 @@ export default function ChatWindow({
               Hey Sam 👋
             </p>
             <p className="mt-2 max-w-sm text-sm text-slate-500">
-              Talk or type in English or Cantonese — {persona.name} will speak
-              back when voice mode is on.
+              Tap the mic to talk, or type. Use 粵 / EN for voice language.
+              Replay any reply with the button below it.
             </p>
           </div>
         )}
@@ -191,7 +210,12 @@ export default function ChatWindow({
             key={msg.id}
             message={msg}
             persona={persona}
-            onReplay={msg.role === "assistant" ? () => onSpeakMessage(msg.content, msg.personaId) : undefined}
+            isSpeakingThis={speakingMessageId === msg.id}
+            onReplay={
+              msg.role === "assistant"
+                ? () => onReplay(msg)
+                : undefined
+            }
           />
         ))}
 
@@ -221,6 +245,7 @@ export default function ChatWindow({
         isListening={isListening}
         interimTranscript={interimTranscript}
         isSpeechSupported={isSpeechSupported}
+        sttHint={sttHint}
         onStartListening={onStartListening}
         onStopListening={onStopListening}
       />

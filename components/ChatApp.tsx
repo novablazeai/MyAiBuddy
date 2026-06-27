@@ -23,6 +23,8 @@ import ChatWindow from "./ChatWindow";
 import ConversationSidebar from "./ConversationSidebar";
 import PersonaSwitcher from "./PersonaSwitcher";
 
+type VoiceActivity = "idle" | "listening" | "speaking";
+
 function getInitialState(): {
   conversations: Conversation[];
   activeConversation: Conversation;
@@ -53,18 +55,27 @@ export default function ChatApp() {
     setLangMode(mode);
     localStorage.setItem("myaibuddy_lang", mode);
   }, []);
+
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [voiceMode, setVoiceMode] = useState(getVoiceModePreference);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceActivity, setVoiceActivity] = useState<VoiceActivity>("idle");
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(
+    null
+  );
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const cancelSpeakRef = useRef<(() => void) | null>(null);
   const voiceModeRef = useRef(voiceMode);
+  const langModeRef = useRef(langMode);
   const handleSendRef = useRef<(content: string) => void>(() => {});
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
+
+  useEffect(() => {
+    langModeRef.current = langMode;
+  }, [langMode]);
 
   const persona = getPersona(activeConversation.personaId);
 
@@ -72,43 +83,68 @@ export default function ChatApp() {
     isListening,
     interimTranscript,
     startListening,
-    stopListening,
+    cancelListening,
     isSupported: isSpeechSupported,
   } = useSpeechRecognition({
     onResult: (transcript) => {
+      setVoiceActivity("idle");
       setVoiceError(null);
       if (transcript.trim()) {
         handleSendRef.current(transcript.trim());
       }
     },
-    onError: (message) => setVoiceError(message),
+    onError: (message) => {
+      setVoiceActivity("idle");
+      setVoiceError(message);
+    },
   });
 
   const setActiveConversation = useCallback((conv: Conversation) => {
     setAppState((prev) => ({ ...prev, activeConversation: conv }));
   }, []);
 
-  const haltVoice = useCallback(() => {
+  const stopPlayback = useCallback(() => {
     cancelSpeakRef.current?.();
     cancelSpeakRef.current = null;
     stopSpeaking();
-    stopListening();
-    setIsSpeaking(false);
-  }, [stopListening]);
+    setVoiceActivity((a) => (a === "speaking" ? "idle" : a));
+    setSpeakingMessageId(null);
+  }, []);
 
-  const speakResponse = useCallback(
-    (text: string, personaId: string) => {
-      haltVoice();
-      setIsSpeaking(true);
-      cancelSpeakRef.current = speakText(text, personaId, () => {
-        setIsSpeaking(false);
-        cancelSpeakRef.current = null;
-        if (voiceModeRef.current) {
-          startListening("auto");
+  const haltVoice = useCallback(() => {
+    stopPlayback();
+    cancelListening();
+    setVoiceActivity("idle");
+  }, [cancelListening, stopPlayback]);
+
+  const playMessage = useCallback(
+    (text: string, personaId: string, messageId?: string) => {
+      if (!text.trim()) return;
+
+      cancelListening();
+      stopPlayback();
+
+      setVoiceActivity("speaking");
+      setSpeakingMessageId(messageId ?? null);
+      setVoiceError(null);
+
+      cancelSpeakRef.current = speakText(
+        text,
+        personaId,
+        () => {
+          setVoiceActivity("idle");
+          setSpeakingMessageId(null);
+          cancelSpeakRef.current = null;
+        },
+        (err) => {
+          setVoiceActivity("idle");
+          setSpeakingMessageId(null);
+          cancelSpeakRef.current = null;
+          setVoiceError(`Playback failed: ${err}`);
         }
-      });
+      );
     },
-    [haltVoice, startListening]
+    [cancelListening, stopPlayback]
   );
 
   const handleToggleVoiceMode = useCallback(() => {
@@ -119,6 +155,19 @@ export default function ChatApp() {
       return next;
     });
   }, [haltVoice]);
+
+  const handleStartListening = useCallback(() => {
+    unlockAudio();
+    stopPlayback();
+    setVoiceError(null);
+    setVoiceActivity("listening");
+    startListening(langModeRef.current);
+  }, [startListening, stopPlayback]);
+
+  const handleStopListening = useCallback(() => {
+    cancelListening();
+    setVoiceActivity("idle");
+  }, [cancelListening]);
 
   const switchPersona = useCallback(
     (personaId: string) => {
@@ -186,6 +235,14 @@ export default function ChatApp() {
       }
     },
     [activeConversation, haltVoice]
+  );
+
+  const handleReplay = useCallback(
+    (message: Message) => {
+      unlockAudio();
+      playMessage(message.content, message.personaId, message.id);
+    },
+    [playMessage]
   );
 
   const handleSend = useCallback(
@@ -270,7 +327,7 @@ export default function ChatApp() {
         });
 
         if (voiceModeRef.current && fullContent.trim()) {
-          speakResponse(fullContent, personaId);
+          playMessage(fullContent, personaId, assistantMessage.id);
         }
       } catch (error) {
         const errorText =
@@ -304,16 +361,25 @@ export default function ChatApp() {
     [
       activeConversation,
       haltVoice,
-      isSpeaking,
       isStreaming,
+      langMode,
+      playMessage,
       setActiveConversation,
-      speakResponse,
     ]
   );
 
   useEffect(() => {
     handleSendRef.current = handleSend;
   }, [handleSend]);
+
+  useEffect(() => {
+    if (voiceActivity === "listening" && !isListening) {
+      setVoiceActivity("idle");
+    }
+  }, [isListening, voiceActivity]);
+
+  const isSpeaking = voiceActivity === "speaking";
+  const showListening = voiceActivity === "listening" && isListening;
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -368,30 +434,20 @@ export default function ChatApp() {
             isStreaming={isStreaming}
             streamingContent={streamingContent}
             isSpeaking={isSpeaking}
+            isListening={showListening}
+            speakingMessageId={speakingMessageId}
             voiceMode={voiceMode}
             voiceError={voiceError}
             langMode={langMode}
             onSend={handleSend}
-            onSpeakMessage={speakResponse}
+            onReplay={handleReplay}
             onToggleVoiceMode={handleToggleVoiceMode}
             onSetLangMode={handleSetLangMode}
             onStopSpeaking={haltVoice}
-            isListening={isListening}
             interimTranscript={interimTranscript}
             isSpeechSupported={isSpeechSupported}
-            onStartListening={() => {
-              unlockAudio();
-              setVoiceError(null);
-              // Stop TTS only — don't call haltVoice() which also calls
-              // stopListening() and triggers an async onend that races with
-              // the new recognition session starting below.
-              cancelSpeakRef.current?.();
-              cancelSpeakRef.current = null;
-              stopSpeaking();
-              setIsSpeaking(false);
-              startListening("auto");
-            }}
-            onStopListening={stopListening}
+            onStartListening={handleStartListening}
+            onStopListening={handleStopListening}
           />
         </div>
       </div>

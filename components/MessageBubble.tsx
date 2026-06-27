@@ -1,5 +1,6 @@
 "use client";
 
+import { type CSSProperties } from "react";
 import type { Message } from "@/lib/types";
 import type { Persona } from "@/lib/personas";
 import PersonaAvatar from "./PersonaAvatar";
@@ -7,10 +8,16 @@ import PersonaAvatar from "./PersonaAvatar";
 interface MessageBubbleProps {
   message: Message;
   persona: Persona;
+  isSpeakingThis?: boolean;
   onReplay?: () => void;
 }
 
-export default function MessageBubble({ message, persona, onReplay }: MessageBubbleProps) {
+export default function MessageBubble({
+  message,
+  persona,
+  isSpeakingThis,
+  onReplay,
+}: MessageBubbleProps) {
   const isUser = message.role === "user";
 
   if (isUser) {
@@ -34,21 +41,50 @@ export default function MessageBubble({ message, persona, onReplay }: MessageBub
   return (
     <div className="flex items-end gap-2.5">
       <PersonaAvatar persona={persona} size="sm" />
-      <div className="group relative max-w-[80%]">
-        <div className="rounded-2xl rounded-bl-md border border-white/60 bg-white/75 px-4 py-3 text-[15px] leading-relaxed text-slate-800 shadow-sm backdrop-blur-xl">
+      <div className="flex max-w-[80%] flex-col gap-1.5">
+        <div
+          className={`rounded-2xl rounded-bl-md border px-4 py-3 text-[15px] leading-relaxed text-slate-800 shadow-sm backdrop-blur-xl ${
+            isSpeakingThis
+              ? "border-white bg-white/95 ring-2"
+              : "border-white/60 bg-white/75"
+          }`}
+          style={
+            isSpeakingThis
+              ? ({ ringColor: `${persona.accentHex}55` } as CSSProperties)
+              : undefined
+          }
+        >
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         </div>
         {onReplay && (
           <button
             type="button"
-            onClick={onReplay}
-            className="absolute -bottom-2.5 right-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/80 bg-white/90 shadow-sm transition-opacity hover:opacity-80 active:opacity-60"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onReplay();
+            }}
+            disabled={isSpeakingThis}
+            className="flex w-fit items-center gap-1.5 rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-xs font-medium shadow-sm transition hover:bg-white disabled:opacity-60"
             style={{ color: persona.accentHex }}
-            title="Replay"
+            title={isSpeakingThis ? "Playing…" : "Replay message audio"}
           >
-            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
-            </svg>
+            {isSpeakingThis ? (
+              <>
+                <span
+                  className="h-2 w-2 animate-pulse rounded-full"
+                  style={{ backgroundColor: persona.accentHex }}
+                />
+                Playing…
+              </>
+            ) : (
+              <>
+                <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                Replay
+              </>
+            )}
           </button>
         )}
       </div>
