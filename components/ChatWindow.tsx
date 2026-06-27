@@ -240,7 +240,7 @@ export default function ChatWindow({
       <ChatInput
         persona={persona}
         onSend={onSend}
-        disabled={isStreaming || isSpeaking}
+        disabled={isStreaming}
         voiceMode={voiceMode}
         isListening={isListening}
         interimTranscript={interimTranscript}
