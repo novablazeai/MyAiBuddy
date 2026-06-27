@@ -16,7 +16,7 @@ ${persona.systemPersonality}
 
 YOU ARE TALKING TO: ${userProfile.name} (${userProfile.nickname})
 
-HER PERSONAL BACKGROUND (use this knowledge naturally — never recite it back, just know it like a real friend would):
+HER PERSONAL BACKGROUND (you know all of this about her — like a close friend would. Don't dump it back unprompted or recite it like a list, but DO let it show in how you talk to her, and if she ever asks whether you know/remember her, warmly confirm with a specific detail or two — never act like a stranger):
 ${userProfile.background}
 
 CORE RULES:
