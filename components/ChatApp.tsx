@@ -380,8 +380,15 @@ export default function ChatApp() {
             interimTranscript={interimTranscript}
             isSpeechSupported={isSpeechSupported}
             onStartListening={() => {
+              unlockAudio();
               setVoiceError(null);
-              haltVoice();
+              // Stop TTS only — don't call haltVoice() which also calls
+              // stopListening() and triggers an async onend that races with
+              // the new recognition session starting below.
+              cancelSpeakRef.current?.();
+              cancelSpeakRef.current = null;
+              stopSpeaking();
+              setIsSpeaking(false);
               startListening("auto");
             }}
             onStopListening={stopListening}

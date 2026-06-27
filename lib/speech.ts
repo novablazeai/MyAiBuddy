@@ -1,10 +1,17 @@
 let audioCtx: AudioContext | null = null;
 let currentSource: AudioBufferSourceNode | null = null;
 
-/** Call this on first user gesture (e.g. clicking Send) to unlock the AudioContext. */
+/** Call this synchronously inside a user gesture handler to permanently unlock the AudioContext. */
 export function unlockAudio(): void {
   if (typeof window === "undefined") return;
   if (!audioCtx) audioCtx = new AudioContext();
+  // Play a 1-sample silent buffer — this is the only reliable way to unlock
+  // AudioContext on Android Chrome. resume() alone is not enough.
+  const buffer = audioCtx.createBuffer(1, 1, 22050);
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audioCtx.destination);
+  source.start(0);
   if (audioCtx.state === "suspended") audioCtx.resume();
 }
 

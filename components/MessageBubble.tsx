@@ -42,7 +42,7 @@ export default function MessageBubble({ message, persona, onReplay }: MessageBub
           <button
             type="button"
             onClick={onReplay}
-            className="absolute -bottom-2.5 right-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/80 bg-white/90 text-slate-400 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 active:opacity-100"
+            className="absolute -bottom-2.5 right-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/80 bg-white/90 shadow-sm transition-opacity hover:opacity-80 active:opacity-60"
             style={{ color: persona.accentHex }}
             title="Replay"
           >
