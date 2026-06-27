@@ -23,7 +23,7 @@ import ChatWindow from "./ChatWindow";
 import ConversationSidebar from "./ConversationSidebar";
 import PersonaSwitcher from "./PersonaSwitcher";
 
-type VoiceActivity = "idle" | "listening" | "speaking";
+type VoiceActivity = "idle" | "speaking";
 
 function getInitialState(): {
   conversations: Conversation[];
@@ -87,14 +87,12 @@ export default function ChatApp() {
     isSupported: isSpeechSupported,
   } = useSpeechRecognition({
     onResult: (transcript) => {
-      setVoiceActivity("idle");
       setVoiceError(null);
       if (transcript.trim()) {
         handleSendRef.current(transcript.trim());
       }
     },
     onError: (message) => {
-      setVoiceActivity("idle");
       setVoiceError(message);
     },
   });
@@ -162,13 +160,11 @@ export default function ChatApp() {
     unlockAudio();
     stopPlayback();
     setVoiceError(null);
-    setVoiceActivity("listening");
     startListening(langModeRef.current);
   }, [startListening, stopPlayback]);
 
   const handleStopListening = useCallback(() => {
     cancelListening();
-    setVoiceActivity("idle");
   }, [cancelListening]);
 
   const switchPersona = useCallback(
@@ -375,14 +371,8 @@ export default function ChatApp() {
     handleSendRef.current = handleSend;
   }, [handleSend]);
 
-  useEffect(() => {
-    if (voiceActivity === "listening" && !isListening) {
-      setVoiceActivity("idle");
-    }
-  }, [isListening, voiceActivity]);
-
   const isSpeaking = voiceActivity === "speaking";
-  const showListening = voiceActivity === "listening" && isListening;
+  const showListening = isListening;
 
   return (
     <div className="flex h-full overflow-hidden">
