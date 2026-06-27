@@ -2,9 +2,10 @@ export type SpeechLang = "zh-HK" | "en-US";
 
 const CANTONESE_PATTERN = /[\u4e00-\u9fff\u3400-\u4dbf]/;
 
-let audioCtx: AudioContext | null = null;
-let currentSource: AudioBufferSourceNode | null = null;
+let currentAudio: HTMLAudioElement | null = null;
 let voicesReady = false;
+/** Skip Gemini for this session after quota/auth errors so replay isn't stuck waiting. */
+let skipGeminiTts = false;
 
 export function detectSpeechLang(text: string): SpeechLang {
   const chinese = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) ?? []).length;
@@ -94,25 +95,21 @@ function pickVoice(
 export function unlockAudio(): void {
   if (typeof window === "undefined") return;
 
-  if (!audioCtx) audioCtx = new AudioContext();
-
-  // Play silent buffer during the user gesture so async Gemini playback is allowed.
-  try {
-    const buffer = audioCtx.createBuffer(1, 1, 22050);
-    const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioCtx.destination);
-    source.start(0);
-  } catch {
-    /* ignore */
-  }
-
-  if (audioCtx.state === "suspended") void audioCtx.resume();
-
   if (window.speechSynthesis) {
     const voices = window.speechSynthesis.getVoices();
     if (voices.length > 0) voicesReady = true;
     window.speechSynthesis.resume();
+  }
+
+  // Prime HTMLAudio so later async play() works after Gemini fetch.
+  try {
+    const silent = new Audio(
+      "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA=="
+    );
+    silent.volume = 0.01;
+    void silent.play().then(() => silent.pause()).catch(() => {});
+  } catch {
+    /* ignore */
   }
 }
 
@@ -147,32 +144,63 @@ function waitForVoices(): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
-function stopGeminiPlayback(): void {
-  if (currentSource) {
-    currentSource.onended = null;
-    try {
-      currentSource.stop();
-    } catch {
-      /* already stopped */
-    }
-    currentSource = null;
+function stopHtmlAudio(): void {
+  if (currentAudio) {
+    currentAudio.onended = null;
+    currentAudio.onerror = null;
+    currentAudio.pause();
+    currentAudio.src = "";
+    currentAudio = null;
   }
 }
 
 export function stopSpeaking(): void {
-  stopGeminiPlayback();
+  stopHtmlAudio();
   if (typeof window !== "undefined" && window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
+}
+
+function playBlob(blob: Blob, cancelled: () => boolean): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    if (cancelled()) {
+      resolve(false);
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      if (currentAudio === audio) currentAudio = null;
+      resolve(true);
+    };
+
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      if (currentAudio === audio) currentAudio = null;
+      reject(new Error("Audio playback failed"));
+    };
+
+    audio.play().catch((err) => {
+      URL.revokeObjectURL(url);
+      if (currentAudio === audio) currentAudio = null;
+      reject(err instanceof Error ? err : new Error("Audio play blocked"));
+    });
+  });
 }
 
 function speakWithBrowser(
   text: string,
   personaId: string,
   cancelled: () => boolean,
-  onEnd?: () => void
+  onEnd?: () => void,
+  onError?: (message: string) => void
 ): void {
   if (typeof window === "undefined" || !window.speechSynthesis) {
+    onError?.("Speech synthesis not available in this browser");
     onEnd?.();
     return;
   }
@@ -181,9 +209,13 @@ function speakWithBrowser(
 
   const segments = splitSpeechSegments(text);
   let index = 0;
+  let hadError = false;
 
   const speakNext = (voices: SpeechSynthesisVoice[]) => {
     if (cancelled() || index >= segments.length) {
+      if (hadError && index === 0) {
+        onError?.("Browser voice playback failed. Try Chrome or Safari.");
+      }
       onEnd?.();
       return;
     }
@@ -200,7 +232,10 @@ function speakWithBrowser(
     if (voice) utterance.voice = voice;
 
     utterance.onend = () => speakNext(voices);
-    utterance.onerror = () => speakNext(voices);
+    utterance.onerror = () => {
+      hadError = true;
+      speakNext(voices);
+    };
 
     window.speechSynthesis.speak(utterance);
   };
@@ -209,7 +244,11 @@ function speakWithBrowser(
     const voices = voicesReady
       ? window.speechSynthesis.getVoices()
       : await waitForVoices();
-    if (!cancelled()) speakNext(voices);
+
+    // Safari/Chrome: must delay speak slightly after cancel().
+    setTimeout(() => {
+      if (!cancelled()) speakNext(voices);
+    }, 80);
   })();
 }
 
@@ -218,7 +257,7 @@ async function speakWithGemini(
   personaId: string,
   cancelled: () => boolean
 ): Promise<boolean> {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined" || skipGeminiTts) return false;
 
   const res = await fetch("/api/tts", {
     method: "POST",
@@ -226,49 +265,28 @@ async function speakWithGemini(
     body: JSON.stringify({ text, personaId }),
   });
 
-  if (!res.ok || cancelled()) {
-    if (!cancelled() && !res.ok) {
-      const errText = await res.text().catch(() => "TTS request failed");
-      throw new Error(errText);
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "TTS request failed");
+    if (res.status === 429 || res.status === 401 || res.status === 403) {
+      skipGeminiTts = true;
     }
-    return false;
+    throw new Error(
+      res.status === 429
+        ? "Gemini voice quota exceeded — using browser voice"
+        : errText.slice(0, 120)
+    );
   }
 
-  if (!audioCtx) audioCtx = new AudioContext();
-  if (audioCtx.state === "suspended") await audioCtx.resume();
   if (cancelled()) return false;
 
-  const arrayBuffer = await res.arrayBuffer();
-  if (cancelled()) return false;
+  const blob = await res.blob();
+  if (cancelled() || blob.size < 100) return false;
 
-  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-  if (cancelled()) return false;
-
-  // Resume again in case the async fetch outlasted the user-gesture window.
-  if (audioCtx.state === "suspended") await audioCtx.resume();
-
-  return new Promise((resolve) => {
-    const source = audioCtx!.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioCtx!.destination);
-    currentSource = source;
-
-    source.onended = () => {
-      if (currentSource === source) currentSource = null;
-      resolve(true);
-    };
-
-    try {
-      source.start(0);
-    } catch {
-      currentSource = null;
-      resolve(false);
-    }
-  });
+  return playBlob(blob, cancelled);
 }
 
 /**
- * Speak text using Gemini TTS (server) when available, browser voices as fallback.
+ * Speak text: Gemini TTS when available, browser voices as fallback.
  */
 export function speakText(
   text: string,
@@ -288,26 +306,20 @@ export function speakText(
 
   void (async () => {
     try {
-      const usedGemini = await speakWithGemini(text, personaId, isCancelled);
-      if (cancelled) return;
-
-      if (!usedGemini) {
-        speakWithBrowser(text, personaId, isCancelled, onEnd);
-        return;
+      if (!skipGeminiTts) {
+        const usedGemini = await speakWithGemini(text, personaId, isCancelled);
+        if (cancelled) return;
+        if (usedGemini) {
+          onEnd?.();
+          return;
+        }
       }
-      onEnd?.();
     } catch (err) {
-      console.warn("Gemini TTS failed, using browser voice:", err);
+      console.warn("Gemini TTS unavailable:", err);
       if (cancelled) return;
-      try {
-        speakWithBrowser(text, personaId, isCancelled, onEnd);
-      } catch {
-        onError?.(
-          err instanceof Error ? err.message : "Could not play audio"
-        );
-        onEnd?.();
-      }
     }
+
+    speakWithBrowser(text, personaId, isCancelled, onEnd, onError);
   })();
 
   return () => {

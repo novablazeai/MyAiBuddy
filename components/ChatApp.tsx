@@ -124,6 +124,8 @@ export default function ChatApp() {
       cancelListening();
       stopPlayback();
 
+      unlockAudio();
+
       setVoiceActivity("speaking");
       setSpeakingMessageId(messageId ?? null);
       setVoiceError(null);
@@ -140,7 +142,7 @@ export default function ChatApp() {
           setVoiceActivity("idle");
           setSpeakingMessageId(null);
           cancelSpeakRef.current = null;
-          setVoiceError(`Playback failed: ${err}`);
+          setVoiceError(err);
         }
       );
     },
@@ -327,6 +329,7 @@ export default function ChatApp() {
         });
 
         if (voiceModeRef.current && fullContent.trim()) {
+          unlockAudio();
           playMessage(fullContent, personaId, assistantMessage.id);
         }
       } catch (error) {
