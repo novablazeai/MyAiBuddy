@@ -3,6 +3,10 @@ import OpenAI from "openai";
 import { buildSystemPrompt } from "@/lib/systemPrompt";
 import { getPersona } from "@/lib/personas";
 
+// Run close to the user (Hong Kong) and to DeepSeek's API (China)
+export const runtime = "nodejs";
+export const preferredRegion = "hkg1";
+
 function getClient() {
   return new OpenAI({
     baseURL: "https://api.deepseek.com",
@@ -51,7 +55,9 @@ export async function POST(req: NextRequest) {
   return new Response(readable, {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
-      "Transfer-Encoding": "chunked",
+      // Prevent proxy/CDN buffering so tokens stream through immediately
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
     },
   });
 }
