@@ -7,9 +7,10 @@ import PersonaAvatar from "./PersonaAvatar";
 interface MessageBubbleProps {
   message: Message;
   persona: Persona;
+  onReplay?: () => void;
 }
 
-export default function MessageBubble({ message, persona }: MessageBubbleProps) {
+export default function MessageBubble({ message, persona, onReplay }: MessageBubbleProps) {
   const isUser = message.role === "user";
 
   if (isUser) {
@@ -33,8 +34,23 @@ export default function MessageBubble({ message, persona }: MessageBubbleProps) 
   return (
     <div className="flex items-end gap-2.5">
       <PersonaAvatar persona={persona} size="sm" />
-      <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-white/60 bg-white/75 px-4 py-3 text-[15px] leading-relaxed text-slate-800 shadow-sm backdrop-blur-xl">
-        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+      <div className="group relative max-w-[80%]">
+        <div className="rounded-2xl rounded-bl-md border border-white/60 bg-white/75 px-4 py-3 text-[15px] leading-relaxed text-slate-800 shadow-sm backdrop-blur-xl">
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        </div>
+        {onReplay && (
+          <button
+            type="button"
+            onClick={onReplay}
+            className="absolute -bottom-2.5 right-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/80 bg-white/90 text-slate-400 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 active:opacity-100"
+            style={{ color: persona.accentHex }}
+            title="Replay"
+          >
+            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

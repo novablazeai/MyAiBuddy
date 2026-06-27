@@ -17,6 +17,7 @@ interface ChatWindowProps {
   voiceError: string | null;
   langMode: LangMode;
   onSend: (message: string) => void;
+  onSpeakMessage: (content: string, personaId: string) => void;
   onToggleVoiceMode: () => void;
   onSetLangMode: (mode: LangMode) => void;
   onStopSpeaking: () => void;
@@ -56,6 +57,7 @@ export default function ChatWindow({
   voiceError,
   langMode,
   onSend,
+  onSpeakMessage,
   onToggleVoiceMode,
   onSetLangMode,
   onStopSpeaking,
@@ -185,7 +187,12 @@ export default function ChatWindow({
         )}
 
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} persona={persona} />
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            persona={persona}
+            onReplay={msg.role === "assistant" ? () => onSpeakMessage(msg.content, msg.personaId) : undefined}
+          />
         ))}
 
         {isStreaming && streamingContent && (

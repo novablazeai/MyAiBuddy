@@ -191,7 +191,7 @@ export default function ChatApp() {
   const handleSend = useCallback(
     async (content: string) => {
       unlockAudio();
-      if (isStreaming || isSpeaking) return;
+      if (isStreaming) return;
 
       haltVoice();
       setVoiceError(null);
@@ -372,6 +372,7 @@ export default function ChatApp() {
             voiceError={voiceError}
             langMode={langMode}
             onSend={handleSend}
+            onSpeakMessage={speakResponse}
             onToggleVoiceMode={handleToggleVoiceMode}
             onSetLangMode={handleSetLangMode}
             onStopSpeaking={haltVoice}
@@ -380,6 +381,7 @@ export default function ChatApp() {
             isSpeechSupported={isSpeechSupported}
             onStartListening={() => {
               setVoiceError(null);
+              haltVoice();
               startListening("auto");
             }}
             onStopListening={stopListening}
