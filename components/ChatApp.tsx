@@ -324,7 +324,7 @@ export default function ChatApp() {
           activeConversation: conv,
         });
 
-        if (voiceModeRef.current && fullContent.trim()) {
+        if (fullContent.trim()) {
           unlockAudio();
           playMessage(fullContent, personaId, assistantMessage.id);
         }
