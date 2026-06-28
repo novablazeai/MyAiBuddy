@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Persona } from "@/lib/personas";
 
 interface PersonaAvatarProps {
@@ -23,6 +23,10 @@ export default function PersonaAvatar({
 }: PersonaAvatarProps) {
   const [imageError, setImageError] = useState(false);
   const { px, text } = sizeMap[size];
+
+  useEffect(() => {
+    setImageError(false);
+  }, [persona.id, persona.avatar]);
 
   if (imageError) {
     return (
@@ -50,6 +54,7 @@ export default function PersonaAvatar({
         alt={persona.name}
         width={px}
         height={px}
+        unoptimized
         className="h-full w-full object-cover"
         onError={() => setImageError(true)}
       />
