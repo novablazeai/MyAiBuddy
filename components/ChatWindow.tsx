@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { LangMode, Message } from "@/lib/types";
 import type { Persona } from "@/lib/personas";
+import type { VoiceOption } from "@/lib/voices";
 import MessageBubble from "./MessageBubble";
 import PersonaAvatar from "./PersonaAvatar";
 import ChatInput from "./ChatInput";
@@ -13,7 +14,6 @@ interface ChatWindowProps {
   isStreaming: boolean;
   streamingContent: string;
   isSpeaking: boolean;
-  speakingMessageId: string | null;
   voiceMode: boolean;
   voiceError: string | null;
   langMode: LangMode;
@@ -27,6 +27,9 @@ interface ChatWindowProps {
   isSpeechSupported: boolean;
   onStartListening: () => void;
   onStopListening: () => void;
+  voiceId: string;
+  voiceOptions: VoiceOption[];
+  onSelectVoice: (id: string) => void;
 }
 
 function TypingIndicator({ accentHex }: { accentHex: string }) {
@@ -54,7 +57,6 @@ export default function ChatWindow({
   isStreaming,
   streamingContent,
   isSpeaking,
-  speakingMessageId,
   voiceMode,
   voiceError,
   langMode,
@@ -68,6 +70,9 @@ export default function ChatWindow({
   isSpeechSupported,
   onStartListening,
   onStopListening,
+  voiceId,
+  voiceOptions,
+  onSelectVoice,
 }: ChatWindowProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -158,6 +163,23 @@ export default function ChatWindow({
               Stop
             </button>
           )}
+          <label className="sr-only" htmlFor="voice-select">
+            Voice
+          </label>
+          <select
+            id="voice-select"
+            value={voiceId}
+            onChange={(e) => onSelectVoice(e.target.value)}
+            title="Pick the voice"
+            className="rounded-full border border-white/80 bg-white/70 px-2.5 py-1.5 text-xs font-medium text-slate-600 outline-none transition hover:bg-white/90 focus:ring-2"
+            style={{ ["--tw-ring-color" as string]: persona.accentHex }}
+          >
+            {voiceOptions.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label} · {v.blurb}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={onToggleVoiceMode}
@@ -210,7 +232,6 @@ export default function ChatWindow({
             key={msg.id}
             message={msg}
             persona={persona}
-            isSpeakingThis={speakingMessageId === msg.id}
             onReplay={
               msg.role === "assistant"
                 ? () => onReplay(msg)

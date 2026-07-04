@@ -5,7 +5,7 @@ import type { LangMode } from "@/lib/types";
 import { recognitionLangFromMode } from "@/lib/speech";
 
 /** Pause tolerance before auto-sending and closing the mic. */
-const SILENCE_TIMEOUT_MS = 5000;
+const SILENCE_TIMEOUT_MS = 3000;
 
 type SpeechRecognitionCtor = new () => SpeechRecognition;
 
@@ -34,6 +34,7 @@ export function useSpeechRecognition({
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const accumulatedRef = useRef("");
+  const interimRef = useRef("");
   const generationRef = useRef(0);
   const wantsMicRef = useRef(false);
   const onResultRef = useRef(onResult);
@@ -64,6 +65,7 @@ export function useSpeechRecognition({
     generationRef.current += 1;
     clearTimers();
     accumulatedRef.current = "";
+    interimRef.current = "";
 
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
@@ -78,6 +80,42 @@ export function useSpeechRecognition({
 
     setIsListening(false);
     setInterimTranscript("");
+  }, [clearTimers]);
+
+  /**
+   * Manually stop the mic and IMMEDIATELY send whatever was captured — no
+   * waiting for the silence timeout. Includes the last interim words that
+   * haven't been finalized yet. Used when the user taps the mic to stop.
+   */
+  const stopListening = useCallback(() => {
+    if (!wantsMicRef.current) return;
+
+    wantsMicRef.current = false;
+    generationRef.current += 1;
+    clearTimers();
+
+    const text = [accumulatedRef.current, interimRef.current]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    accumulatedRef.current = "";
+    interimRef.current = "";
+
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    if (recognition) {
+      try {
+        recognition.abort();
+      } catch {
+        /* already stopped */
+      }
+    }
+
+    setIsListening(false);
+    setInterimTranscript("");
+
+    if (text) onResultRef.current(text);
   }, [clearTimers]);
 
   const startListening = useCallback(
@@ -101,8 +139,13 @@ export function useSpeechRecognition({
         clearTimers();
         wantsMicRef.current = false;
 
-        const text = accumulatedRef.current.trim();
+        const text = [accumulatedRef.current, interimRef.current]
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .join(" ")
+          .trim();
         accumulatedRef.current = "";
+        interimRef.current = "";
         recognitionRef.current = null;
 
         try {
@@ -157,6 +200,8 @@ export function useSpeechRecognition({
               ? `${accumulatedRef.current} ${chunk}`
               : chunk;
           }
+
+          interimRef.current = interim.trim();
 
           const display = [accumulatedRef.current, interim.trim()]
             .filter(Boolean)
@@ -245,6 +290,7 @@ export function useSpeechRecognition({
     isListening,
     interimTranscript,
     startListening,
+    stopListening,
     cancelListening,
     isSupported: typeof window !== "undefined" && !!getSpeechRecognition(),
   };

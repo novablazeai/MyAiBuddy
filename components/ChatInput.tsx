@@ -119,8 +119,10 @@ export default function ChatInput({
 
         <button
           type="button"
-          onClick={handleSend}
-          disabled={disabled || isListening || !value.trim()}
+          // While recording, Send finalizes the voice input and sends it right
+          // away (no 3s wait). Otherwise it sends the typed text.
+          onClick={() => (isListening ? onStopListening?.() : handleSend())}
+          disabled={isListening ? false : disabled || !value.trim()}
           className="flex h-11 shrink-0 items-center justify-center rounded-2xl px-5 text-sm font-medium text-white shadow-md transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           style={{ backgroundColor: persona.accentHex }}
         >

@@ -13,17 +13,19 @@ import {
 } from "@/lib/chatStorage";
 import {
   getVoiceModePreference,
+  getVoicePreference,
+  playMessage as playMessageAudio,
   setVoiceModePreference,
-  speakText,
-  stopSpeaking,
+  setVoicePreference,
+  stopPlayback as stopPlayerPlayback,
   unlockAudio,
 } from "@/lib/speech";
+import { PERSONA_VOICE_OPTIONS } from "@/lib/voices";
+import { useAudioPlayerStatus } from "@/hooks/useAudioPlayer";
 import type { Conversation, LangMode, Message } from "@/lib/types";
 import ChatWindow from "./ChatWindow";
 import ConversationSidebar from "./ConversationSidebar";
 import PersonaSwitcher from "./PersonaSwitcher";
-
-type VoiceActivity = "idle" | "speaking";
 
 function getInitialState(): {
   conversations: Conversation[];
@@ -59,12 +61,22 @@ export default function ChatApp() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [voiceMode, setVoiceMode] = useState(getVoiceModePreference);
-  const [voiceActivity, setVoiceActivity] = useState<VoiceActivity>("idle");
-  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(
-    null
+  const [voiceId, setVoiceId] = useState<string>(() =>
+    getVoicePreference(activeConversation.personaId)
   );
+  const [voicePersonaId, setVoicePersonaId] = useState(
+    activeConversation.personaId
+  );
+  // Re-read the saved voice when the active persona changes (during render, the
+  // React-recommended way to derive state from a changing value).
+  if (voicePersonaId !== activeConversation.personaId) {
+    setVoicePersonaId(activeConversation.personaId);
+    setVoiceId(getVoicePreference(activeConversation.personaId));
+  }
   const [voiceError, setVoiceError] = useState<string | null>(null);
-  const cancelSpeakRef = useRef<(() => void) | null>(null);
+  const playerStatus = useAudioPlayerStatus();
+  const isSpeaking =
+    playerStatus.status === "playing" || playerStatus.status === "paused";
   const voiceModeRef = useRef(voiceMode);
   const langModeRef = useRef(langMode);
   const handleSendRef = useRef<(content: string) => void>(() => {});
@@ -77,12 +89,22 @@ export default function ChatApp() {
     langModeRef.current = langMode;
   }, [langMode]);
 
+  const handleSelectVoice = useCallback(
+    (id: string) => {
+      setVoicePreference(activeConversation.personaId, id);
+      setVoiceId(id);
+      stopPlayerPlayback(); // drop any in-progress audio so the next uses it
+    },
+    [activeConversation.personaId]
+  );
+
   const persona = getPersona(activeConversation.personaId);
 
   const {
     isListening,
     interimTranscript,
     startListening,
+    stopListening,
     cancelListening,
     isSupported: isSpeechSupported,
   } = useSpeechRecognition({
@@ -102,49 +124,23 @@ export default function ChatApp() {
   }, []);
 
   const stopPlayback = useCallback(() => {
-    cancelSpeakRef.current?.();
-    cancelSpeakRef.current = null;
-    stopSpeaking();
-    setVoiceActivity((a) => (a === "speaking" ? "idle" : a));
-    setSpeakingMessageId(null);
+    stopPlayerPlayback();
   }, []);
 
   const haltVoice = useCallback(() => {
-    stopPlayback();
+    stopPlayerPlayback();
     cancelListening();
-    setVoiceActivity("idle");
-  }, [cancelListening, stopPlayback]);
+  }, [cancelListening]);
 
   const playMessage = useCallback(
-    (text: string, personaId: string, messageId?: string) => {
+    (text: string, personaId: string, messageId: string) => {
       if (!text.trim()) return;
-
       cancelListening();
-      stopPlayback();
-
       unlockAudio();
-
-      setVoiceActivity("speaking");
-      setSpeakingMessageId(messageId ?? null);
       setVoiceError(null);
-
-      cancelSpeakRef.current = speakText(
-        text,
-        personaId,
-        () => {
-          setVoiceActivity("idle");
-          setSpeakingMessageId(null);
-          cancelSpeakRef.current = null;
-        },
-        (err) => {
-          setVoiceActivity("idle");
-          setSpeakingMessageId(null);
-          cancelSpeakRef.current = null;
-          setVoiceError(err);
-        }
-      );
+      void playMessageAudio(text, personaId, messageId);
     },
-    [cancelListening, stopPlayback]
+    [cancelListening]
   );
 
   const handleToggleVoiceMode = useCallback(() => {
@@ -164,8 +160,9 @@ export default function ChatApp() {
   }, [startListening, stopPlayback]);
 
   const handleStopListening = useCallback(() => {
-    cancelListening();
-  }, [cancelListening]);
+    // Tapping the mic to stop finalizes and sends immediately (no silence wait).
+    stopListening();
+  }, [stopListening]);
 
   const switchPersona = useCallback(
     (personaId: string) => {
@@ -279,6 +276,8 @@ export default function ChatApp() {
         content: m.content,
       }));
 
+      const assistantId = crypto.randomUUID();
+
       try {
         const response = await fetch("/api/chat", {
           method: "POST",
@@ -305,7 +304,7 @@ export default function ChatApp() {
         }
 
         const assistantMessage: Message = {
-          id: crypto.randomUUID(),
+          id: assistantId,
           role: "assistant",
           content: fullContent,
           timestamp: Date.now(),
@@ -324,6 +323,8 @@ export default function ChatApp() {
           activeConversation: conv,
         });
 
+        // One TTS call for the whole reply — keeps Adrian's voice consistent
+        // (Gemini TTS drifts between calls, so we never split a reply).
         if (fullContent.trim()) {
           unlockAudio();
           playMessage(fullContent, personaId, assistantMessage.id);
@@ -371,7 +372,6 @@ export default function ChatApp() {
     handleSendRef.current = handleSend;
   }, [handleSend]);
 
-  const isSpeaking = voiceActivity === "speaking";
   const showListening = isListening;
 
   return (
@@ -428,10 +428,12 @@ export default function ChatApp() {
             streamingContent={streamingContent}
             isSpeaking={isSpeaking}
             isListening={showListening}
-            speakingMessageId={speakingMessageId}
             voiceMode={voiceMode}
-            voiceError={voiceError}
+            voiceError={voiceError ?? playerStatus.error}
             langMode={langMode}
+            voiceId={voiceId}
+            voiceOptions={PERSONA_VOICE_OPTIONS[persona.id] ?? PERSONA_VOICE_OPTIONS.adrian}
+            onSelectVoice={handleSelectVoice}
             onSend={handleSend}
             onReplay={handleReplay}
             onToggleVoiceMode={handleToggleVoiceMode}
