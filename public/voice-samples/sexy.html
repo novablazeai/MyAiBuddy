@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Adrian 聲音 · 邊個最 sexy</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 48px;
+    font-family: -apple-system, "PingFang HK", "Segoe UI", system-ui, sans-serif;
+    background: linear-gradient(160deg, #eef2ff, #fdf2f8);
+    color: #1e293b; min-height: 100vh;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #64748b; font-size: 14px; margin: 0 0 18px; }
+  .sentence {
+    background: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.9);
+    border-radius: 16px; padding: 14px 16px; margin-bottom: 22px;
+    font-size: 16px; line-height: 1.6; box-shadow: 0 4px 16px rgba(0,0,0,.05);
+  }
+  .card {
+    background: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.9);
+    border-radius: 16px; padding: 14px 16px; margin-bottom: 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.05);
+  }
+  .card.current { border-color: #2563eb; box-shadow: 0 4px 18px rgba(37,99,235,.18); }
+  .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .name { font-weight: 600; font-size: 17px; }
+  .tag { font-size: 11px; font-weight: 600; color: #fff; background: #2563eb; padding: 2px 8px; border-radius: 999px; }
+  .desc { color: #64748b; font-size: 13px; margin: 0 0 10px; }
+  audio { width: 100%; }
+  .hint { color: #94a3b8; font-size: 13px; text-align: center; margin-top: 22px; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>😏 Adrian 邊把聲最 sexy / 自然</h1>
+    <p class="sub">同一句 · 速度 1.25×、+6dB(同 app 一樣) · 一次播一把</p>
+    <div class="sentence">喂，做咩成日掛住做嘢啊？慢慢嚟啦，我又唔會走。今晚就攤低放鬆下，得我陪住你，咩都唔使諗，好冇？</div>
+    <div id="cards"></div>
+    <p class="hint">聽完揀你最鍾意嗰把,話我個名(例如「用 Fenrir」),<br>我就 set 做 Adrian 預設。(app 裡面個 dropdown 都可以隨時自己換)</p>
+  </div>
+<script>
+  const voices = [
+    { id:"Orus",      name:"Orus",      desc:"而家用緊 — 後生、有活力", current:true },
+    { id:"Enceladus", name:"Enceladus", desc:"爽朗、清晰" },
+    { id:"Iapetus",   name:"Iapetus",   desc:"斯文、平穩、低調" },
+    { id:"Fenrir",    name:"Fenrir",    desc:"低沉、有力 — 通常最『man』" },
+    { id:"Charon",    name:"Charon",    desc:"沉穩、成熟" },
+    { id:"Puck",      name:"Puck",      desc:"活潑、playful" },
+  ];
+  const box = document.getElementById("cards");
+  voices.forEach(v => {
+    const el = document.createElement("div");
+    el.className = "card" + (v.current ? " current" : "");
+    el.innerHTML = `
+      <div class="row"><span class="name">${v.name}</span>${v.current?'<span class="tag">而家用緊</span>':''}</div>
+      <p class="desc">${v.desc}</p>
+      <audio controls preload="none" src="./sexy-${v.id}.mp3"></audio>`;
+    box.appendChild(el);
+  });
+  document.addEventListener("play", e => {
+    document.querySelectorAll("audio").forEach(a => { if (a !== e.target) a.pause(); });
+  }, true);
+</script>
+</body>
+</html>
