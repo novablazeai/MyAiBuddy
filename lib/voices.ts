@@ -17,17 +17,10 @@ export const PERSONA_VOICE_OPTIONS: Record<string, VoiceOption[]> = {
     { id: "Fenrir", label: "Fenrir", blurb: "低沉、有力" },
     { id: "Charon", label: "Charon", blurb: "沉穩" },
   ],
-  martha: [
-    { id: "Aoede", label: "Aoede", blurb: "溫暖" },
-    { id: "Kore", label: "Kore", blurb: "清亮" },
-    { id: "Leda", label: "Leda", blurb: "柔和" },
-    { id: "Callirrhoe", label: "Callirrhoe", blurb: "優雅" },
-  ],
 };
 
 export const DEFAULT_VOICE_ID: Record<string, string> = {
   adrian: "Orus",
-  martha: "Aoede",
 };
 
 /** Validate a requested voice against the persona's allowlist; fall back safely. */

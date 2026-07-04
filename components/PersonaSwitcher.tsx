@@ -12,6 +12,10 @@ export default function PersonaSwitcher({
   activePersonaId,
   onSwitch,
 }: PersonaSwitcherProps) {
+  // With a single persona the switcher is redundant — the header already
+  // shows who you're talking to.
+  if (personas.length <= 1) return null;
+
   return (
     <div className="flex gap-2 overflow-x-auto px-4 py-3">
       {personas.map((persona) => {
