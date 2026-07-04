@@ -15,6 +15,12 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: "MyAIBuddy",
   description: "Your personal AI companion — warm, witty, and always in your corner.",
+  // Opens in standalone (app-like) mode when added to the iOS home screen.
+  appleWebApp: {
+    capable: true,
+    title: "MyAIBuddy",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({

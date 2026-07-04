@@ -40,53 +40,68 @@ function cleanForSpeech(text: string): string {
     .trim();
 }
 
-// Google Cloud TTS rejects input over 5000 bytes, so we split long replies
-// under this (with headroom) and stitch the audio back together. Cloud TTS is
-// deterministic per voice, so chunks sound identical — no drift.
+// Cloud TTS has two limits: the whole request must be <5000 bytes, AND each
+// individual sentence (text between . 。 ! ? etc.) must be short — it rejects
+// sentences past ~70 chars. So we pack short sentences up to TTS_MAX_BYTES, and
+// break any over-long run-on sentence at commas so no single sentence is too
+// long. Cloud TTS is deterministic per voice, so the stitched audio has no drift.
 const TTS_MAX_BYTES = 4000;
+const SENTENCE_MAX_BYTES = 150; // ~50 chars — safely under the ~70-char limit
 
 function byteLength(s: string): number {
   return new TextEncoder().encode(s).length;
 }
 
-/** Split text into <=TTS_MAX_BYTES chunks, preferring sentence boundaries. */
-function splitForTts(text: string): string[] {
-  if (byteLength(text) <= TTS_MAX_BYTES) return [text];
-
-  const pieces = text.match(/[^。！？.!?\n]*[。！？.!?\n]+|[^。！？.!?\n]+/g) ?? [
-    text,
+/** Break one over-long sentence at commas, then hard-split anything still huge. */
+function splitLongSentence(sentence: string): string[] {
+  const clauses = sentence.match(/[^，、；;：,]*[，、；;：,]+|[^，、；;：,]+/g) ?? [
+    sentence,
   ];
-  const chunks: string[] = [];
-  let buf = "";
-
-  const hardSplit = (s: string) => {
+  const out: string[] = [];
+  for (const clause of clauses) {
+    if (byteLength(clause) <= SENTENCE_MAX_BYTES) {
+      out.push(clause);
+      continue;
+    }
     let piece = "";
-    for (const ch of s) {
-      if (piece && byteLength(piece + ch) > TTS_MAX_BYTES) {
-        chunks.push(piece);
+    for (const ch of clause) {
+      if (piece && byteLength(piece + ch) > SENTENCE_MAX_BYTES) {
+        out.push(piece);
         piece = "";
       }
       piece += ch;
     }
-    if (piece) buf = piece;
-  };
+    if (piece) out.push(piece);
+  }
+  return out;
+}
 
-  for (const s of pieces) {
-    if (buf && byteLength(buf + s) > TTS_MAX_BYTES) {
+/** Split text into chunks safe for Cloud TTS (byte total + per-sentence length). */
+function splitForTts(text: string): string[] {
+  const sentences = text.match(
+    /[^。！？.!?\n]*[。！？.!?\n]+|[^。！？.!?\n]+/g
+  ) ?? [text];
+  const chunks: string[] = [];
+  let buf = "";
+  const flush = () => {
+    if (buf) {
       chunks.push(buf);
       buf = "";
     }
-    if (byteLength(s) > TTS_MAX_BYTES) {
-      if (buf) {
-        chunks.push(buf);
-        buf = "";
-      }
-      hardSplit(s);
-    } else {
-      buf += s;
+  };
+
+  for (const s of sentences) {
+    // An over-long sentence would be rejected even alone, so fragment it and
+    // send each fragment as its own chunk (packing would re-form a long one).
+    if (byteLength(s) > SENTENCE_MAX_BYTES) {
+      flush();
+      for (const frag of splitLongSentence(s)) chunks.push(frag);
+      continue;
     }
+    if (buf && byteLength(buf + s) > TTS_MAX_BYTES) flush();
+    buf += s;
   }
-  if (buf) chunks.push(buf);
+  flush();
   return chunks;
 }
 
