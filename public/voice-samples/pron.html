@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>讀音測試 · 五 / 唔</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px 16px 48px; font-family:-apple-system,"PingFang HK","Segoe UI",system-ui,sans-serif; background:linear-gradient(160deg,#eef2ff,#fdf2f8); color:#1e293b; min-height:100vh; }
+  .wrap { max-width:640px; margin:0 auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:#64748b; font-size:14px; margin:0 0 20px; }
+  .grp { background:rgba(255,255,255,.82); border:1px solid rgba(255,255,255,.9); border-radius:16px; padding:16px; margin-bottom:18px; box-shadow:0 4px 16px rgba(0,0,0,.05); }
+  .gh { font-weight:700; font-size:16px; margin:0 0 4px; }
+  .want { color:#64748b; font-size:13px; margin:0 0 12px; }
+  .opt { margin-bottom:12px; }
+  .opt:last-child { margin-bottom:0; }
+  .ol { font-weight:600; font-size:14px; margin-bottom:5px; }
+  audio { width:100%; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🔤 讀音測試:五 / 唔</h1>
+    <p class="sub">同一句,換唔同字。揀邊個聽落最啱音,話我(例如「五用 B,唔用 A」)。</p>
+
+    <div class="grp">
+      <p class="gh">「五」—— 應該讀 ng5(「唔」+ 升調)</p>
+      <p class="want">句子:一、二、三、四、五。我買咗五個橙。</p>
+      <div class="opt"><div class="ol">A — 用「五」(原本)</div><audio controls preload="none" src="./five-A-original.mp3"></audio></div>
+      <div class="opt"><div class="ol">B — 用「伍」(同音 ng5)</div><audio controls preload="none" src="./five-B-ng.mp3"></audio></div>
+      <div class="opt"><div class="ol">C — 用「午」(同音 ng5)</div><audio controls preload="none" src="./five-C-ng2.mp3"></audio></div>
+    </div>
+
+    <div class="grp">
+      <p class="gh">「唔」—— 應該讀 m4(低降,類似「唔…」)</p>
+      <p class="want">句子:唔該晒,我唔係咁樣諗㗎。</p>
+      <div class="opt"><div class="ol">A — 用「唔」(原本)</div><audio controls preload="none" src="./m-A-original.mp3"></audio></div>
+      <div class="opt"><div class="ol">B — 用「嘸」(同音 m4)</div><audio controls preload="none" src="./m-B-alt.mp3"></audio></div>
+    </div>
+
+    <p class="sub" style="text-align:center">揀完話我知,我就將啱嗰個字寫入 TTS(只影響把聲,唔影響你睇到嘅字)。<br>如果全部都唔啱音,咁就係 Chirp3-HD 嘅極限,要轉 Azure 先搞得掂。</p>
+  </div>
+<script>
+  document.addEventListener("play", e => { document.querySelectorAll("audio").forEach(a=>{ if(a!==e.target) a.pause(); }); }, true);
+</script>
+</body>
+</html>
