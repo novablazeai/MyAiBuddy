@@ -164,7 +164,7 @@ export default function ConversationSidebar({
                               e.stopPropagation();
                               startEditing(conv);
                             }}
-                            className="rounded-lg p-1.5 text-slate-400 opacity-0 transition hover:bg-white hover:text-slate-700 group-hover:opacity-100"
+                            className="rounded-lg p-1.5 text-slate-400 opacity-100 transition hover:bg-white hover:text-slate-700 md:opacity-0 md:group-hover:opacity-100"
                             aria-label="Rename conversation"
                             title="Rename"
                           >
@@ -183,7 +183,7 @@ export default function ConversationSidebar({
                               e.stopPropagation();
                               onDelete(conv.id);
                             }}
-                            className="mr-2 rounded-lg p-1.5 text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                            className="mr-2 rounded-lg p-1.5 text-slate-400 opacity-100 transition hover:bg-red-50 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100"
                             aria-label="Delete conversation"
                             title="Delete"
                           >
