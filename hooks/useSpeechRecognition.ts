@@ -33,7 +33,12 @@ export function useSpeechRecognition({
   const pendingStartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const accumulatedRef = useRef("");
+  // Transcript is split into three buffers to avoid the classic Web Speech
+  // duplication/looping bug: `committed` = finals from ENDED sessions,
+  // `sessionFinal` = finals recomputed fresh for the CURRENT session (never
+  // appended incrementally), `interim` = the live, not-yet-final words.
+  const committedRef = useRef("");
+  const sessionFinalRef = useRef("");
   const interimRef = useRef("");
   const generationRef = useRef(0);
   const wantsMicRef = useRef(false);
@@ -46,30 +51,38 @@ export function useSpeechRecognition({
   }, [onResult, onError]);
 
   const clearTimers = useCallback(() => {
-    if (pendingStartRef.current !== null) {
-      clearTimeout(pendingStartRef.current);
-      pendingStartRef.current = null;
-    }
-    if (silenceTimerRef.current !== null) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-    if (restartTimerRef.current !== null) {
-      clearTimeout(restartTimerRef.current);
-      restartTimerRef.current = null;
+    for (const ref of [pendingStartRef, silenceTimerRef, restartTimerRef]) {
+      if (ref.current !== null) {
+        clearTimeout(ref.current);
+        ref.current = null;
+      }
     }
   }, []);
+
+  const resetTranscript = useCallback(() => {
+    committedRef.current = "";
+    sessionFinalRef.current = "";
+    interimRef.current = "";
+  }, []);
+
+  const fullTranscript = useCallback(
+    () =>
+      [committedRef.current, sessionFinalRef.current, interimRef.current]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(" ")
+        .trim(),
+    []
+  );
 
   const cancelListening = useCallback(() => {
     wantsMicRef.current = false;
     generationRef.current += 1;
     clearTimers();
-    accumulatedRef.current = "";
-    interimRef.current = "";
+    resetTranscript();
 
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
-
     if (recognition) {
       try {
         recognition.abort();
@@ -80,12 +93,11 @@ export function useSpeechRecognition({
 
     setIsListening(false);
     setInterimTranscript("");
-  }, [clearTimers]);
+  }, [clearTimers, resetTranscript]);
 
   /**
    * Manually stop the mic and IMMEDIATELY send whatever was captured — no
-   * waiting for the silence timeout. Includes the last interim words that
-   * haven't been finalized yet. Used when the user taps the mic to stop.
+   * waiting for the silence timeout. Used when the user taps the mic to stop.
    */
   const stopListening = useCallback(() => {
     if (!wantsMicRef.current) return;
@@ -94,13 +106,8 @@ export function useSpeechRecognition({
     generationRef.current += 1;
     clearTimers();
 
-    const text = [accumulatedRef.current, interimRef.current]
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-    accumulatedRef.current = "";
-    interimRef.current = "";
+    const text = fullTranscript();
+    resetTranscript();
 
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
@@ -116,7 +123,7 @@ export function useSpeechRecognition({
     setInterimTranscript("");
 
     if (text) onResultRef.current(text);
-  }, [clearTimers]);
+  }, [clearTimers, fullTranscript, resetTranscript]);
 
   const startListening = useCallback(
     (langMode: LangMode = "auto") => {
@@ -130,96 +137,80 @@ export function useSpeechRecognition({
 
       cancelListening();
       wantsMicRef.current = true;
+      resetTranscript();
       const generation = generationRef.current;
       const lang = recognitionLangFromMode(langMode);
 
-      const endSession = (recognition: SpeechRecognition) => {
-        if (generation !== generationRef.current || !wantsMicRef.current) return;
+      const isStale = () =>
+        generation !== generationRef.current || !wantsMicRef.current;
 
+      const endSession = () => {
+        if (isStale()) return;
         clearTimers();
         wantsMicRef.current = false;
 
-        const text = [accumulatedRef.current, interimRef.current]
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-        accumulatedRef.current = "";
-        interimRef.current = "";
-        recognitionRef.current = null;
+        const text = fullTranscript();
+        resetTranscript();
 
-        try {
-          recognition.abort();
-        } catch {
-          /* ok */
+        const recognition = recognitionRef.current;
+        recognitionRef.current = null;
+        if (recognition) {
+          try {
+            recognition.abort();
+          } catch {
+            /* ok */
+          }
         }
 
         setIsListening(false);
         setInterimTranscript("");
-
-        if (text) {
-          onResultRef.current(text);
-        }
+        if (text) onResultRef.current(text);
       };
 
-      const scheduleSilenceTimeout = (recognition: SpeechRecognition) => {
+      const scheduleSilenceTimeout = () => {
         if (silenceTimerRef.current !== null) {
           clearTimeout(silenceTimerRef.current);
         }
-        silenceTimerRef.current = setTimeout(() => {
-          silenceTimerRef.current = null;
-          endSession(recognition);
-        }, SILENCE_TIMEOUT_MS);
+        silenceTimerRef.current = setTimeout(endSession, SILENCE_TIMEOUT_MS);
       };
 
-      const attachHandlers = (recognition: SpeechRecognition) => {
+      const startSession = () => {
+        if (isStale()) return;
+
+        const recognition = new Ctor();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = lang;
+        recognitionRef.current = recognition;
+
         recognition.onstart = () => {
-          if (generation !== generationRef.current || !wantsMicRef.current) return;
+          if (isStale()) return;
           setIsListening(true);
-          scheduleSilenceTimeout(recognition);
+          scheduleSilenceTimeout();
         };
 
         recognition.onresult = (event: SpeechRecognitionEvent) => {
-          if (generation !== generationRef.current || !wantsMicRef.current) return;
+          if (isStale() || recognitionRef.current !== recognition) return;
 
+          // Recompute this session's transcript from ALL results each time —
+          // never append incrementally, so re-delivered results can't loop.
+          let sessionFinal = "";
           let interim = "";
-          let final = "";
-
-          for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          for (let i = 0; i < event.results.length; i += 1) {
             const result = event.results[i];
-            if (result.isFinal) {
-              final += result[0].transcript;
-            } else {
-              interim += result[0].transcript;
-            }
+            if (result.isFinal) sessionFinal += result[0].transcript;
+            else interim += result[0].transcript;
           }
-
-          if (final.trim()) {
-            const chunk = final.trim();
-            accumulatedRef.current = accumulatedRef.current
-              ? `${accumulatedRef.current} ${chunk}`
-              : chunk;
-          }
-
+          sessionFinalRef.current = sessionFinal.trim();
           interimRef.current = interim.trim();
 
-          const display = [accumulatedRef.current, interim.trim()]
-            .filter(Boolean)
-            .join(" ");
-          setInterimTranscript(display);
-
-          scheduleSilenceTimeout(recognition);
+          setInterimTranscript(fullTranscript());
+          scheduleSilenceTimeout();
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
           if (generation !== generationRef.current) return;
-
-          if (event.error === "aborted") return;
-
-          if (event.error === "no-speech") {
-            // Keep mic open — onend will restart if we're still in listen mode.
-            return;
-          }
+          if (event.error === "aborted" || event.error === "no-speech") return;
 
           onErrorRef.current?.(
             event.error === "not-allowed"
@@ -232,42 +223,27 @@ export function useSpeechRecognition({
         };
 
         recognition.onend = () => {
-          if (generation !== generationRef.current || !wantsMicRef.current) {
-            setIsListening(false);
+          if (isStale() || recognitionRef.current !== recognition) {
+            if (isStale()) setIsListening(false);
             return;
           }
 
-          if (recognitionRef.current !== recognition) return;
+          // Fold this session's final text into the committed buffer, then
+          // start a FRESH recognizer so the next session's results are clean.
+          const finalized = sessionFinalRef.current.trim();
+          if (finalized) {
+            committedRef.current = [committedRef.current, finalized]
+              .filter(Boolean)
+              .join(" ");
+          }
+          sessionFinalRef.current = "";
+          interimRef.current = "";
 
-          // Browser ended the session (common on pause) — restart while user still wants mic.
           restartTimerRef.current = setTimeout(() => {
             restartTimerRef.current = null;
-            if (
-              generation !== generationRef.current ||
-              !wantsMicRef.current ||
-              recognitionRef.current !== recognition
-            ) {
-              return;
-            }
-            try {
-              recognition.start();
-            } catch {
-              endSession(recognition);
-            }
+            startSession();
           }, 150);
         };
-      };
-
-      pendingStartRef.current = setTimeout(() => {
-        pendingStartRef.current = null;
-        if (generation !== generationRef.current || !wantsMicRef.current) return;
-
-        const recognition = new Ctor();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = lang;
-        recognitionRef.current = recognition;
-        attachHandlers(recognition);
 
         try {
           recognition.start();
@@ -275,9 +251,14 @@ export function useSpeechRecognition({
           onErrorRef.current?.("Mic is busy. Wait a moment and try again.");
           cancelListening();
         }
+      };
+
+      pendingStartRef.current = setTimeout(() => {
+        pendingStartRef.current = null;
+        startSession();
       }, 100);
     },
-    [cancelListening, clearTimers]
+    [cancelListening, clearTimers, fullTranscript, resetTranscript]
   );
 
   useEffect(() => {
