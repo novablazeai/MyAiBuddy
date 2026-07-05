@@ -80,6 +80,25 @@ export default function ChatWindow({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent, isStreaming]);
 
+  // Force the freshest version: update the service worker + drop caches, then
+  // reload — so users get the latest deploy without closing/reopening the app.
+  const handleRefresh = async () => {
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.update().catch(() => {})));
+      }
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {
+      /* ignore — reload anyway */
+    } finally {
+      window.location.reload();
+    }
+  };
+
   const sttHint =
     langMode === "cantonese"
       ? "Mic listens in Cantonese (粵)"
@@ -90,7 +109,14 @@ export default function ChatWindow({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-3 border-b border-white/50 bg-white/60 px-4 py-3 backdrop-blur-xl">
-        <div className="relative">
+        <button
+          type="button"
+          onClick={handleRefresh}
+          className="relative rounded-full transition hover:opacity-80 focus:outline-none focus:ring-2"
+          style={{ ["--tw-ring-color" as string]: persona.accentHex }}
+          title="Tap to refresh (keeps your chats)"
+          aria-label="Refresh app"
+        >
           <PersonaAvatar persona={persona} size="md" />
           {isSpeaking && (
             <span
@@ -103,7 +129,7 @@ export default function ChatWindow({
               />
             </span>
           )}
-        </div>
+        </button>
         <div className="min-w-0 flex-1">
           <h1
             className="font-serif text-lg font-semibold leading-tight"
