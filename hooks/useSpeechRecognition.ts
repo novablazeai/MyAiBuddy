@@ -33,11 +33,11 @@ export function useSpeechRecognition({
   const pendingStartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Transcript is split into three buffers to avoid the classic Web Speech
-  // duplication/looping bug: `committed` = finals from ENDED sessions,
-  // `sessionFinal` = finals recomputed fresh for the CURRENT session (never
-  // appended incrementally), `interim` = the live, not-yet-final words.
-  const committedRef = useRef("");
+  // Transcript is split to avoid the classic Web Speech duplication/looping bug:
+  // `committedSegments` = finalized text from ENDED sessions (one entry each,
+  // deduped on commit), `sessionFinal` = finals recomputed fresh for the CURRENT
+  // session (never appended incrementally), `interim` = live not-yet-final words.
+  const committedSegmentsRef = useRef<string[]>([]);
   const sessionFinalRef = useRef("");
   const interimRef = useRef("");
   const generationRef = useRef(0);
@@ -60,20 +60,45 @@ export function useSpeechRecognition({
   }, []);
 
   const resetTranscript = useCallback(() => {
-    committedRef.current = "";
+    committedSegmentsRef.current = [];
     sessionFinalRef.current = "";
     interimRef.current = "";
   }, []);
 
   const fullTranscript = useCallback(
     () =>
-      [committedRef.current, sessionFinalRef.current, interimRef.current]
+      [
+        ...committedSegmentsRef.current,
+        sessionFinalRef.current,
+        interimRef.current,
+      ]
         .map((s) => s.trim())
         .filter(Boolean)
         .join(" ")
         .trim(),
     []
   );
+
+  /**
+   * Fold a finished session's final text into the committed segments, guarding
+   * against Android re-delivering the same audio after a restart: skip exact
+   * repeats/subsets, and replace (not append) when it's a re-transcription that
+   * merely extends the previous segment.
+   */
+  const commitSegment = useCallback((finalized: string) => {
+    const text = finalized.trim();
+    if (!text) return;
+    const segs = committedSegmentsRef.current;
+    const last = segs[segs.length - 1];
+    if (last && (last === text || last.endsWith(text) || last.includes(text))) {
+      return; // duplicate of what we already captured
+    }
+    if (last && text.startsWith(last)) {
+      segs[segs.length - 1] = text; // extended re-transcription of the same words
+    } else {
+      segs.push(text);
+    }
+  }, []);
 
   const cancelListening = useCallback(() => {
     wantsMicRef.current = false;
@@ -178,7 +203,9 @@ export function useSpeechRecognition({
         if (isStale()) return;
 
         const recognition = new Ctor();
-        recognition.continuous = true;
+        // continuous=false is far more reliable on Android (continuous mode
+        // re-delivers the same audio and loops); we chain sessions via onend.
+        recognition.continuous = false;
         recognition.interimResults = true;
         recognition.lang = lang;
         recognitionRef.current = recognition;
@@ -228,14 +255,9 @@ export function useSpeechRecognition({
             return;
           }
 
-          // Fold this session's final text into the committed buffer, then
-          // start a FRESH recognizer so the next session's results are clean.
-          const finalized = sessionFinalRef.current.trim();
-          if (finalized) {
-            committedRef.current = [committedRef.current, finalized]
-              .filter(Boolean)
-              .join(" ");
-          }
+          // Fold this session's final text into the committed segments (deduped),
+          // then start a FRESH recognizer so the next session's results are clean.
+          commitSegment(sessionFinalRef.current);
           sessionFinalRef.current = "";
           interimRef.current = "";
 
@@ -258,7 +280,7 @@ export function useSpeechRecognition({
         startSession();
       }, 100);
     },
-    [cancelListening, clearTimers, fullTranscript, resetTranscript]
+    [cancelListening, clearTimers, commitSegment, fullTranscript, resetTranscript]
   );
 
   useEffect(() => {
