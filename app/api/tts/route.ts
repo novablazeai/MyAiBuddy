@@ -20,6 +20,7 @@ function isCantonese(text: string): boolean {
 // on-screen text is never touched). Chosen by ear test. Easy to extend/revert.
 const PRONUNCIATION_FIXES: [RegExp, string][] = [
   [/唔/g, "吾"], // 唔 (m4) misread -> 吾 (ng4), which sounds right on this voice
+  [/五/g, "嗯"], // 五 (ng5) misread -> 嗯, a nasal that gives the right "um5" sound
 ];
 function fixPronunciation(text: string): string {
   return PRONUNCIATION_FIXES.reduce((t, [re, sub]) => t.replace(re, sub), text);
