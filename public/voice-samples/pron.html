@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>讀音測試 · 唔</title>
+<title>讀音測試 · 五</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -22,23 +22,21 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>🔤 讀音測試:唔</h1>
-    <p class="sub">句子:唔該晒,我唔係咁樣諗㗎。揀邊個聽落最啱「m4 / ng4」音。</p>
+    <h1>🔤 讀音測試:五 (ng5)</h1>
 
     <div class="grp done">
-      <p class="gh">✅ 五 —— 已定:用返原本「五」(你揀咗 A)</p>
+      <p class="gh">✅ 唔 —— 已定:用「吾」(ng4,你揀咗 C),已寫入把聲</p>
     </div>
 
     <div class="grp">
-      <p class="gh">「唔」—— 試緊 m4 同 ng4</p>
-      <p class="want">應該係低降音,類似「唔…」</p>
-      <div class="opt"><div class="ol">A — 唔 (原本)</div><audio controls preload="none" src="./m-A-original.mp3"></audio></div>
-      <div class="opt"><div class="ol">B — 嘸 (m4)</div><audio controls preload="none" src="./m-B-alt.mp3"></audio></div>
-      <div class="opt"><div class="ol">C — 吾 (ng4)</div><audio controls preload="none" src="./m-C-ng4-ng.mp3"></audio></div>
-      <div class="opt"><div class="ol">D — 吳 (ng4,姓氏 Ng)</div><audio controls preload="none" src="./m-D-ng4-surname.mp3"></audio></div>
+      <p class="gh">「五」—— 試 ng5 同音字</p>
+      <p class="want">句子:一、二、三、四、五。我買咗五個橙。應該讀 ng5(低升音)。</p>
+      <div class="opt"><div class="ol">A — 五 (原本)</div><audio controls preload="none" src="./five-A-orig.mp3"></audio></div>
+      <div class="opt"><div class="ol">B — 伍 (ng5)</div><audio controls preload="none" src="./five-B-ng5-wu.mp3"></audio></div>
+      <div class="opt"><div class="ol">C — 午 (ng5,「晏晝」個午)</div><audio controls preload="none" src="./five-C-ng5-ng.mp3"></audio></div>
     </div>
 
-    <p class="sub" style="text-align:center">揀邊個最啱,話我(例如「唔用 C」),我就寫入把聲。<br>全部都唔啱嘅話,就係要轉 Azure 先真正搞得掂。</p>
+    <p class="sub" style="text-align:center">揀邊個最啱 ng5 音,話我(例如「五用 B」),我就寫入把聲。<br>全部都唔啱嘅話,就係要轉 Azure 先真正搞得掂。</p>
   </div>
 <script>
   document.addEventListener("play", e => { document.querySelectorAll("audio").forEach(a=>{ if(a!==e.target) a.pause(); }); }, true);

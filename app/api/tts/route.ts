@@ -17,9 +17,10 @@ function isCantonese(text: string): boolean {
 
 // Chirp3-HD yue-HK mispronounces a few Cantonese-only characters and offers no
 // pronunciation-override API, so we swap in homophones for the AUDIO only (the
-// on-screen text is never touched). Easy to extend or revert per character.
-// (五 reads fine as-is, per ear test — no swap needed.)
-const PRONUNCIATION_FIXES: [RegExp, string][] = [];
+// on-screen text is never touched). Chosen by ear test. Easy to extend/revert.
+const PRONUNCIATION_FIXES: [RegExp, string][] = [
+  [/唔/g, "吾"], // 唔 (m4) misread -> 吾 (ng4), which sounds right on this voice
+];
 function fixPronunciation(text: string): string {
   return PRONUNCIATION_FIXES.reduce((t, [re, sub]) => t.replace(re, sub), text);
 }
