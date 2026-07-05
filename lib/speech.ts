@@ -123,37 +123,53 @@ function concatBuffers(buffers: AudioBuffer[]): AudioBuffer {
   return out;
 }
 
-/** Fetch + decode one text chunk into an AudioBuffer. */
+const TTS_MAX_CONCURRENCY = 4; // avoid bursting Google's per-minute rate limit
+const TTS_RETRIES = 2;
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Fetch + decode one text chunk into an AudioBuffer, retrying transient
+ * failures. Returns null (skip this chunk) if it never succeeds — one bad
+ * chunk should never silence the whole reply.
+ */
 async function synthesizeOne(
   chunk: string,
   personaId: string,
   cancelled: () => boolean
 ): Promise<AudioBuffer | null> {
-  const res = await fetch("/api/tts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text: chunk,
-      personaId,
-      voice: getVoicePreference(personaId),
-    }),
-  });
+  for (let attempt = 0; attempt <= TTS_RETRIES; attempt += 1) {
+    if (cancelled()) return null;
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: chunk,
+          personaId,
+          voice: getVoicePreference(personaId),
+        }),
+      });
+      if (cancelled()) return null;
 
-  if (cancelled()) return null;
-
-  if (!res.ok) {
-    const msg = await res.text().catch(() => "TTS request failed");
-    throw new Error(msg.slice(0, 200));
+      if (res.ok) {
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (audioCtx.state === "suspended") await audioCtx.resume();
+        if (cancelled()) return null;
+        const arrayBuffer = await res.arrayBuffer();
+        if (cancelled()) return null;
+        return await audioCtx.decodeAudioData(arrayBuffer);
+      }
+      if (attempt === TTS_RETRIES) {
+        console.warn("TTS chunk failed after retries:", res.status);
+        return null;
+      }
+    } catch {
+      if (attempt === TTS_RETRIES) return null;
+    }
+    await delay(300 * (attempt + 1)); // linear backoff before retrying
   }
-
-  if (!audioCtx) audioCtx = new AudioContext();
-  if (audioCtx.state === "suspended") await audioCtx.resume();
-  if (cancelled()) return null;
-
-  const arrayBuffer = await res.arrayBuffer();
-  if (cancelled()) return null;
-
-  return audioCtx.decodeAudioData(arrayBuffer);
+  return null;
 }
 
 /** Synthesize text (chunking long replies) into one playable AudioBuffer. */
@@ -166,13 +182,29 @@ async function synthesize(
   if (!clean) return null;
 
   const chunks = splitForTts(clean);
-  const results = await Promise.all(
-    chunks.map((chunk) => synthesizeOne(chunk, personaId, cancelled))
+  const results: (AudioBuffer | null)[] = new Array(chunks.length).fill(null);
+
+  // Synthesize in order but with bounded concurrency (a small worker pool).
+  let next = 0;
+  const worker = async () => {
+    while (!cancelled()) {
+      const i = next;
+      next += 1;
+      if (i >= chunks.length) return;
+      results[i] = await synthesizeOne(chunks[i], personaId, cancelled);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(TTS_MAX_CONCURRENCY, chunks.length) }, worker)
   );
   if (cancelled()) return null;
 
   const buffers = results.filter((b): b is AudioBuffer => b !== null);
-  if (buffers.length === 0) return null;
+  // Only surface an error if we couldn't synthesize ANY of it.
+  if (buffers.length === 0) {
+    if (chunks.length > 0) throw new Error("Could not play audio");
+    return null;
+  }
   return concatBuffers(buffers);
 }
 
