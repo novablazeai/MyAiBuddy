@@ -124,7 +124,7 @@ function concatBuffers(buffers: AudioBuffer[]): AudioBuffer {
 }
 
 const TTS_MAX_CONCURRENCY = 4; // avoid bursting Google's per-minute rate limit
-const TTS_RETRIES = 2;
+const TTS_RETRIES = 3; // survive brief mobile-network blips
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -167,7 +167,7 @@ async function synthesizeOne(
     } catch {
       if (attempt === TTS_RETRIES) return null;
     }
-    await delay(300 * (attempt + 1)); // linear backoff before retrying
+    await delay(400 * (attempt + 1)); // backoff before retrying (0.4s, 0.8s, 1.2s)
   }
   return null;
 }
