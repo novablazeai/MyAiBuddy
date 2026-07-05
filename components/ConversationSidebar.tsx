@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Conversation } from "@/lib/types";
 import { personas } from "@/lib/personas";
 
@@ -11,6 +12,7 @@ interface ConversationSidebarProps {
   onSelect: (conversation: Conversation) => void;
   onNewChat: () => void;
   onDelete: (id: string) => void;
+  onRename: (id: string, title: string) => void;
 }
 
 function formatDate(timestamp: number): string {
@@ -31,11 +33,26 @@ export default function ConversationSidebar({
   onSelect,
   onNewChat,
   onDelete,
+  onRename,
 }: ConversationSidebarProps) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
   const grouped = personas.map((persona) => ({
     persona,
     conversations: conversations.filter((c) => c.personaId === persona.id),
   }));
+
+  const startEditing = (conv: Conversation) => {
+    setEditingId(conv.id);
+    setEditValue(conv.title);
+  };
+
+  const commitEditing = () => {
+    if (editingId) onRename(editingId, editValue);
+    setEditingId(null);
+    setEditValue("");
+  };
 
   return (
     <>
@@ -95,6 +112,7 @@ export default function ConversationSidebar({
               ) : (
                 convs.map((conv) => {
                   const isActive = conv.id === activeConversationId;
+                  const isEditing = editingId === conv.id;
                   return (
                     <div
                       key={conv.id}
@@ -102,29 +120,77 @@ export default function ConversationSidebar({
                         isActive ? "bg-white/90 shadow-sm" : "hover:bg-white/60"
                       }`}
                     >
-                      <button
-                        type="button"
-                        onClick={() => onSelect(conv)}
-                        className="min-w-0 flex-1 px-3 py-2.5 text-left"
-                      >
-                        <p className="truncate text-sm font-medium text-slate-800">
-                          {conv.title}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {formatDate(conv.updatedAt)}
-                        </p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDelete(conv.id);
-                        }}
-                        className="mr-2 rounded-lg p-1.5 text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
-                        aria-label="Delete conversation"
-                      >
-                        ✕
-                      </button>
+                      {isEditing ? (
+                        <input
+                          autoFocus
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={commitEditing}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              commitEditing();
+                            } else if (e.key === "Escape") {
+                              setEditingId(null);
+                              setEditValue("");
+                            }
+                          }}
+                          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2"
+                          style={{ ["--tw-ring-color" as string]: persona.accentHex }}
+                          maxLength={80}
+                          aria-label="Rename conversation"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onSelect(conv)}
+                          onDoubleClick={() => startEditing(conv)}
+                          className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                        >
+                          <p className="truncate text-sm font-medium text-slate-800">
+                            {conv.title}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {formatDate(conv.updatedAt)}
+                          </p>
+                        </button>
+                      )}
+
+                      {!isEditing && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEditing(conv);
+                            }}
+                            className="rounded-lg p-1.5 text-slate-400 opacity-0 transition hover:bg-white hover:text-slate-700 group-hover:opacity-100"
+                            aria-label="Rename conversation"
+                            title="Rename"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDelete(conv.id);
+                            }}
+                            className="mr-2 rounded-lg p-1.5 text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                            aria-label="Delete conversation"
+                            title="Delete"
+                          >
+                            ✕
+                          </button>
+                        </>
+                      )}
                     </div>
                   );
                 })

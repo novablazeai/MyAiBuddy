@@ -9,6 +9,7 @@ import {
   generateTitle,
   getConversations,
   getLatestConversationForPersona,
+  renameConversation,
   saveConversation,
 } from "@/lib/chatStorage";
 import {
@@ -232,6 +233,18 @@ export default function ChatApp() {
     [activeConversation, haltVoice]
   );
 
+  const handleRenameConversation = useCallback((id: string, title: string) => {
+    renameConversation(id, title);
+    const cleaned = title.trim() || "New chat";
+    setAppState((prev) => ({
+      conversations: getConversations(),
+      activeConversation:
+        prev.activeConversation.id === id
+          ? { ...prev.activeConversation, title: cleaned }
+          : prev.activeConversation,
+    }));
+  }, []);
+
   const handleReplay = useCallback(
     (message: Message) => {
       unlockAudio();
@@ -261,9 +274,12 @@ export default function ChatApp() {
       let conv: Conversation = {
         ...activeConversation,
         messages: [...activeConversation.messages, userMessage],
-        title: isFirstMessage
-          ? generateTitle(content)
-          : activeConversation.title,
+        // Auto-title only an untouched "New chat" — never overwrite a name the
+        // user set themselves.
+        title:
+          isFirstMessage && activeConversation.title.trim() === "New chat"
+            ? generateTitle(content)
+            : activeConversation.title,
         updatedAt: Date.now(),
       };
 
@@ -384,6 +400,7 @@ export default function ChatApp() {
         onSelect={handleSelectConversation}
         onNewChat={handleNewChat}
         onDelete={handleDeleteConversation}
+        onRename={handleRenameConversation}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

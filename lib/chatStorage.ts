@@ -35,6 +35,19 @@ export function saveConversation(conv: Conversation): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
 }
 
+export function renameConversation(id: string, title: string): void {
+  if (!isBrowser()) return;
+  const conversations = getConversations();
+  const index = conversations.findIndex((c) => c.id === id);
+  if (index < 0) return;
+  // Keep updatedAt as-is so a rename doesn't jump the chat to the top.
+  conversations[index] = {
+    ...conversations[index],
+    title: title.trim() || "New chat",
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+}
+
 export function deleteConversation(id: string): void {
   if (!isBrowser()) return;
   const conversations = getConversations().filter((c) => c.id !== id);
