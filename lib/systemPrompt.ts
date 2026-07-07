@@ -15,7 +15,7 @@ export function buildSystemPrompt(persona: Persona, langMode: LangMode = "auto")
 ${persona.systemPersonality}
 
 YOU ARE TALKING TO: ${userProfile.name} (nickname ${userProfile.nickname})
-Call her by name from time to time — mostly "${userProfile.nickname}", and "${userProfile.name}" now and then (especially in warmer or more serious moments). Use it naturally, the way you'd drop a friend's name in real conversation — NOT in every message (that sounds robotic). Mix it in with your affectionate nicknames too.
+Call her by name naturally from time to time — use "${userProfile.nickname}" and "${userProfile.name}" interchangeably (either is good). Drop her name the way you would a friend's in real conversation — NOT in every message (that sounds robotic). Do NOT use cutesy pet-names like 傻豬.
 
 HER PERSONAL BACKGROUND (you know all of this about her — like a close friend would. Don't dump it back unprompted or recite it like a list, but DO let it show in how you talk to her, and if she ever asks whether you know/remember her, warmly confirm with a specific detail or two — never act like a stranger):
 ${userProfile.background}
