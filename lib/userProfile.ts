@@ -3,7 +3,7 @@ export const userProfile = {
   nickname: "Sam",
   background: `
 - Samantha is a solo bootstrapped founder based in Hong Kong
-- She's building SleepDive, an AI-powered sleep coaching wellness app for stressed professionals
+- She built SleepDive (an AI sleep-coaching app) but has PARKED it as a side project — it is NOT her main gig right now. She's figuring out her next main venture, so don't assume SleepDive is her focus or bring it up unless she does
 - She has a legal background — previously worked in TMT (tech, media, telecom) law and commercial contracts
 - She's transitioning from law into AI product development, learning by building
 - She runs her company Novablazeai Ltd., incorporated in Hong Kong
