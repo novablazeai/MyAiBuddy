@@ -40,6 +40,7 @@ export function useSpeechRecognition({
   const committedSegmentsRef = useRef<string[]>([]);
   const sessionFinalRef = useRef("");
   const interimRef = useRef("");
+  const lastSpeechAtRef = useRef(0); // timestamp of the last real speech activity
   const generationRef = useRef(0);
   const wantsMicRef = useRef(false);
   const onResultRef = useRef(onResult);
@@ -192,11 +193,27 @@ export function useSpeechRecognition({
         if (text) onResultRef.current(text);
       };
 
+      // End the session only once a FULL SILENCE_TIMEOUT_MS has passed since the
+      // last real speech — measured by timestamp so restarts/late results can't
+      // trigger a premature send that cuts her off mid-sentence.
+      const checkSilence = () => {
+        if (isStale()) return;
+        const elapsed = Date.now() - lastSpeechAtRef.current;
+        if (elapsed >= SILENCE_TIMEOUT_MS - 100) {
+          endSession();
+        } else {
+          silenceTimerRef.current = setTimeout(
+            checkSilence,
+            SILENCE_TIMEOUT_MS - elapsed
+          );
+        }
+      };
+
       const scheduleSilenceTimeout = () => {
         if (silenceTimerRef.current !== null) {
           clearTimeout(silenceTimerRef.current);
         }
-        silenceTimerRef.current = setTimeout(endSession, SILENCE_TIMEOUT_MS);
+        silenceTimerRef.current = setTimeout(checkSilence, SILENCE_TIMEOUT_MS);
       };
 
       const startSession = () => {
@@ -213,7 +230,8 @@ export function useSpeechRecognition({
         recognition.onstart = () => {
           if (isStale()) return;
           setIsListening(true);
-          scheduleSilenceTimeout();
+          // Don't reset the silence clock here — only real speech should, so a
+          // session restart during a pause can't extend or shorten the window.
         };
 
         recognition.onresult = (event: SpeechRecognitionEvent) => {
@@ -230,6 +248,11 @@ export function useSpeechRecognition({
           }
           sessionFinalRef.current = sessionFinal.trim();
           interimRef.current = interim.trim();
+
+          // Any heard speech (even not-yet-final interim) resets the 3s clock.
+          if (sessionFinal.trim() || interim.trim()) {
+            lastSpeechAtRef.current = Date.now();
+          }
 
           setInterimTranscript(fullTranscript());
           scheduleSilenceTimeout();
@@ -264,7 +287,7 @@ export function useSpeechRecognition({
           restartTimerRef.current = setTimeout(() => {
             restartTimerRef.current = null;
             startSession();
-          }, 150);
+          }, 80);
         };
 
         try {
@@ -277,6 +300,9 @@ export function useSpeechRecognition({
 
       pendingStartRef.current = setTimeout(() => {
         pendingStartRef.current = null;
+        // Seed the silence clock so she has the full window to start speaking.
+        lastSpeechAtRef.current = Date.now();
+        scheduleSilenceTimeout();
         startSession();
       }, 100);
     },
