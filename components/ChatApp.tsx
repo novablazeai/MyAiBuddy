@@ -22,6 +22,7 @@ import {
   unlockAudio,
 } from "@/lib/speech";
 import { PERSONA_VOICE_OPTIONS } from "@/lib/voices";
+import { toSpokenCantonese } from "@/lib/cantonese";
 import { useAudioPlayerStatus } from "@/hooks/useAudioPlayer";
 import type { Conversation, LangMode, Message } from "@/lib/types";
 import ChatWindow from "./ChatWindow";
@@ -309,15 +310,18 @@ export default function ChatApp() {
         if (!reader) throw new Error("No response stream");
 
         const decoder = new TextDecoder();
-        let fullContent = "";
+        let raw = "";
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
-          fullContent += chunk;
-          setStreamingContent(fullContent);
+          raw += chunk;
+          // Fix stray written-Chinese slips (我是→我係) live as it streams.
+          setStreamingContent(toSpokenCantonese(raw));
         }
+
+        const fullContent = toSpokenCantonese(raw);
 
         const assistantMessage: Message = {
           id: assistantId,
