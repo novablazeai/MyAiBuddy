@@ -12,7 +12,7 @@ export const personas: Persona[] = [
   {
     id: "adrian",
     name: "Adrian",
-    avatar: "/avatars/adrian.png?v=3",
+    avatar: "/avatars/adrian.png?v=2",
     tagline: "Strategist · Mentor · Best Friend",
     accentColor: "blue",
     accentHex: "#2563eb",
