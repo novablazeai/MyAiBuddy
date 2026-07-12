@@ -343,9 +343,9 @@ export default function ChatApp() {
           activeConversation: conv,
         });
 
-        // One TTS call for the whole reply — keeps Adrian's voice consistent
-        // (Gemini TTS drifts between calls, so we never split a reply).
-        if (fullContent.trim()) {
+        // Only synthesize speech (which costs TTS) when Voice is ON. With Voice
+        // off, replies come as text; tap ▶ on a message to hear that one.
+        if (voiceModeRef.current && fullContent.trim()) {
           unlockAudio();
           playMessage(fullContent, personaId, assistantMessage.id);
         }
