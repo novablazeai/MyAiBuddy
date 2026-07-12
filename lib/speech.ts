@@ -126,18 +126,46 @@ function concatBuffers(buffers: AudioBuffer[]): AudioBuffer {
 const TTS_MAX_CONCURRENCY = 4; // avoid bursting Google's per-minute rate limit
 const TTS_RETRIES = 3; // survive brief mobile-network blips
 
+// Persistent audio cache — so identical text+voice is synthesized (and BILLED)
+// at most once, ever. Replays, refreshes, and reopens reuse the stored MP3.
+// This cache name is preserved across the in-app refresh (see ChatWindow).
+export const TTS_AUDIO_CACHE = "tts-audio-v1";
+
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * Fetch + decode one text chunk into an AudioBuffer, retrying transient
- * failures. Returns null (skip this chunk) if it never succeeds — one bad
- * chunk should never silence the whole reply.
- */
-async function synthesizeOne(
+const cacheSupported = () =>
+  typeof caches !== "undefined" && typeof crypto?.subtle !== "undefined";
+
+async function ttsCacheKey(chunk: string, personaId: string): Promise<string> {
+  const raw = `${getVoicePreference(personaId)}|${chunk}`;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(raw)
+  );
+  const hex = Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `/__tts__/${hex}`;
+}
+
+/** Fetch one chunk's MP3 bytes — from the cache if present, else the API. */
+async function fetchChunkAudio(
   chunk: string,
   personaId: string,
   cancelled: () => boolean
-): Promise<AudioBuffer | null> {
+): Promise<ArrayBuffer | null> {
+  let key: string | null = null;
+  if (cacheSupported()) {
+    try {
+      key = await ttsCacheKey(chunk, personaId);
+      const cache = await caches.open(TTS_AUDIO_CACHE);
+      const hit = await cache.match(key);
+      if (hit) return await hit.arrayBuffer(); // free — no API call, no charge
+    } catch {
+      key = null; // caching unavailable — fall through to the network
+    }
+  }
+
   for (let attempt = 0; attempt <= TTS_RETRIES; attempt += 1) {
     if (cancelled()) return null;
     try {
@@ -151,14 +179,22 @@ async function synthesizeOne(
         }),
       });
       if (cancelled()) return null;
-
       if (res.ok) {
-        if (!audioCtx) audioCtx = new AudioContext();
-        if (audioCtx.state === "suspended") await audioCtx.resume();
-        if (cancelled()) return null;
-        const arrayBuffer = await res.arrayBuffer();
-        if (cancelled()) return null;
-        return await audioCtx.decodeAudioData(arrayBuffer);
+        const buf = await res.arrayBuffer();
+        if (key) {
+          try {
+            const cache = await caches.open(TTS_AUDIO_CACHE);
+            await cache.put(
+              key,
+              new Response(buf.slice(0), {
+                headers: { "Content-Type": "audio/mpeg" },
+              })
+            );
+          } catch {
+            /* cache write failed — not fatal */
+          }
+        }
+        return buf;
       }
       if (attempt === TTS_RETRIES) {
         console.warn("TTS chunk failed after retries:", res.status);
@@ -167,9 +203,26 @@ async function synthesizeOne(
     } catch {
       if (attempt === TTS_RETRIES) return null;
     }
-    await delay(400 * (attempt + 1)); // backoff before retrying (0.4s, 0.8s, 1.2s)
+    await delay(400 * (attempt + 1)); // backoff (0.4s, 0.8s, 1.2s)
   }
   return null;
+}
+
+/**
+ * Get one text chunk as an AudioBuffer — reuses cached audio when available so
+ * repeat playback costs nothing. Returns null (skip) if it never succeeds.
+ */
+async function synthesizeOne(
+  chunk: string,
+  personaId: string,
+  cancelled: () => boolean
+): Promise<AudioBuffer | null> {
+  const arrayBuffer = await fetchChunkAudio(chunk, personaId, cancelled);
+  if (!arrayBuffer || cancelled()) return null;
+  if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+  if (cancelled()) return null;
+  return audioCtx.decodeAudioData(arrayBuffer);
 }
 
 /** Synthesize text (chunking long replies) into one playable AudioBuffer. */

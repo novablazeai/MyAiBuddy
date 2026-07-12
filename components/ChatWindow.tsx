@@ -90,7 +90,13 @@ export default function ChatWindow({
       }
       if ("caches" in window) {
         const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
+        // Keep the TTS audio cache — clearing it would re-bill already-spoken
+        // replies. Only drop the app-shell caches to load the latest code.
+        await Promise.all(
+          keys
+            .filter((k) => k !== "tts-audio-v1")
+            .map((k) => caches.delete(k))
+        );
       }
     } catch {
       /* ignore — reload anyway */
