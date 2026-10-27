@@ -32,7 +32,43 @@ export function saveConversation(conv: Conversation): void {
   } else {
     conversations.push(updated);
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+  writeConversations(conversations, conv.id);
+}
+
+/**
+ * Persist all conversations. Photo thumbnails make history bigger, so if the
+ * browser's storage quota is hit, drop thumbnails from other chats first (the
+ * text and photo notes stay), then from everything, rather than losing the
+ * message itself.
+ */
+function writeConversations(conversations: Conversation[], keepId?: string) {
+  const attempt = (list: Conversation[]) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  };
+  const stripThumbs = (c: Conversation): Conversation => ({
+    ...c,
+    messages: c.messages.map((m) =>
+      m.attachment ? { ...m, attachment: { ...m.attachment, thumbnail: "" } } : m
+    ),
+  });
+
+  try {
+    attempt(conversations);
+    return;
+  } catch {
+    // Quota exceeded: fall through and retry with less data.
+  }
+  try {
+    attempt(conversations.map((c) => (c.id === keepId ? c : stripThumbs(c))));
+    return;
+  } catch {
+    // Still too big.
+  }
+  try {
+    attempt(conversations.map(stripThumbs));
+  } catch (error) {
+    console.error("Could not save chat history", error);
+  }
 }
 
 export function renameConversation(id: string, title: string): void {

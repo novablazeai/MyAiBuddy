@@ -24,7 +24,12 @@ import {
 import { PERSONA_VOICE_OPTIONS } from "@/lib/voices";
 import { toSpokenCantonese } from "@/lib/cantonese";
 import { useAudioPlayerStatus } from "@/hooks/useAudioPlayer";
-import type { Conversation, LangMode, Message } from "@/lib/types";
+import type {
+  Conversation,
+  LangMode,
+  Message,
+  PreparedImage,
+} from "@/lib/types";
 import ChatWindow from "./ChatWindow";
 import ConversationSidebar from "./ConversationSidebar";
 import PersonaSwitcher from "./PersonaSwitcher";
@@ -81,7 +86,9 @@ export default function ChatApp() {
     playerStatus.status === "playing" || playerStatus.status === "paused";
   const voiceModeRef = useRef(voiceMode);
   const langModeRef = useRef(langMode);
-  const handleSendRef = useRef<(content: string) => void>(() => {});
+  const handleSendRef = useRef<
+    (content: string, image?: PreparedImage) => void
+  >(() => {});
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -255,7 +262,7 @@ export default function ChatApp() {
   );
 
   const handleSend = useCallback(
-    async (content: string) => {
+    async (content: string, image?: PreparedImage) => {
       unlockAudio();
       if (isStreaming) return;
 
@@ -269,6 +276,9 @@ export default function ChatApp() {
         content,
         timestamp: Date.now(),
         personaId,
+        ...(image
+          ? { attachment: { kind: "image" as const, thumbnail: image.thumbnail } }
+          : {}),
       };
 
       const isFirstMessage = activeConversation.messages.length === 0;
@@ -279,7 +289,7 @@ export default function ChatApp() {
         // user set themselves.
         title:
           isFirstMessage && activeConversation.title.trim() === "New chat"
-            ? generateTitle(content)
+            ? generateTitle(content || "📷 Photo")
             : activeConversation.title,
         updatedAt: Date.now(),
       };
@@ -288,10 +298,48 @@ export default function ChatApp() {
       setIsStreaming(true);
       setStreamingContent("");
 
-      const apiMessages = conv.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // Earlier photos are not re-sent: each is replaced by its short note so
+      // Adrian still knows what was shared, without paying for the image again.
+      const apiMessages = conv.messages.map((m) => {
+        if (m.id === userMessage.id || !m.attachment) {
+          return { role: m.role, content: m.content };
+        }
+        const note = m.attachment.note
+          ? `[Sam shared a photo earlier: ${m.attachment.note}]`
+          : "[Sam shared a photo earlier]";
+        return {
+          role: m.role,
+          content: m.content ? `${note}\n${m.content}` : note,
+        };
+      });
+
+      // Write the one-line memory note in parallel with the reply, so it adds
+      // no waiting time. If it fails, the photo is simply remembered as "a photo".
+      const notePromise: Promise<string | undefined> = image
+        ? fetch("/api/describe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              image: { data: image.data, mimeType: image.mimeType },
+            }),
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j) => (typeof j?.note === "string" && j.note ? j.note : undefined))
+            .catch(() => undefined)
+        : Promise.resolve(undefined);
+
+      const withNote = async (c: Conversation): Promise<Conversation> => {
+        const note = await notePromise;
+        if (!note) return c;
+        return {
+          ...c,
+          messages: c.messages.map((m) =>
+            m.id === userMessage.id && m.attachment
+              ? { ...m, attachment: { ...m.attachment, note } }
+              : m
+          ),
+        };
+      };
 
       const assistantId = crypto.randomUUID();
 
@@ -299,7 +347,14 @@ export default function ChatApp() {
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: apiMessages, personaId, langMode }),
+          body: JSON.stringify({
+            messages: apiMessages,
+            personaId,
+            langMode,
+            ...(image
+              ? { image: { data: image.data, mimeType: image.mimeType } }
+              : {}),
+          }),
         });
 
         if (!response.ok) {
@@ -331,11 +386,11 @@ export default function ChatApp() {
           personaId,
         };
 
-        conv = {
+        conv = await withNote({
           ...conv,
           messages: [...conv.messages, assistantMessage],
           updatedAt: Date.now(),
-        };
+        });
 
         saveConversation(conv);
         setAppState({
@@ -363,11 +418,11 @@ export default function ChatApp() {
           personaId,
         };
 
-        conv = {
+        conv = await withNote({
           ...conv,
           messages: [...conv.messages, errorMessage],
           updatedAt: Date.now(),
-        };
+        });
         saveConversation(conv);
         setAppState({
           conversations: getConversations(),

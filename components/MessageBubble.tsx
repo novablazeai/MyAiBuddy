@@ -45,7 +45,24 @@ export default function MessageBubble({
                 : "rgba(219, 39, 119, 0.15)",
           }}
         >
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          {message.attachment && (
+            message.attachment.thumbnail ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={message.attachment.thumbnail}
+                alt={message.attachment.note ?? "Photo"}
+                title={message.attachment.note}
+                className={`max-h-48 rounded-xl object-cover ${message.content ? "mb-2" : ""}`}
+              />
+            ) : (
+              <p className={`text-xs italic text-slate-500 ${message.content ? "mb-1" : ""}`}>
+                📷 Photo{message.attachment.note ? `: ${message.attachment.note}` : ""}
+              </p>
+            )
+          )}
+          {message.content && (
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          )}
         </div>
       </div>
     );
