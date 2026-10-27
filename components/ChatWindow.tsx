@@ -7,6 +7,7 @@ import type { VoiceOption } from "@/lib/voices";
 import MessageBubble from "./MessageBubble";
 import PersonaAvatar from "./PersonaAvatar";
 import ChatInput from "./ChatInput";
+import type { PreparedImage } from "@/lib/types";
 
 interface ChatWindowProps {
   persona: Persona;
@@ -17,7 +18,7 @@ interface ChatWindowProps {
   voiceMode: boolean;
   voiceError: string | null;
   langMode: LangMode;
-  onSend: (message: string) => void;
+  onSend: (message: string, image?: PreparedImage) => void;
   onReplay: (message: Message) => void;
   onToggleVoiceMode: () => void;
   onSetLangMode: (mode: LangMode) => void;
