@@ -20,7 +20,7 @@ export const PERSONA_VOICE_OPTIONS: Record<string, VoiceOption[]> = {
 };
 
 export const DEFAULT_VOICE_ID: Record<string, string> = {
-  adrian: "Orus",
+  adrian: "Enceladus",
 };
 
 /** Validate a requested voice against the persona's allowlist; fall back safely. */
