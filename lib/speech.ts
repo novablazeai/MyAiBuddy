@@ -137,7 +137,13 @@ const cacheSupported = () =>
   typeof caches !== "undefined" && typeof crypto?.subtle !== "undefined";
 
 async function ttsCacheKey(chunk: string, personaId: string): Promise<string> {
-  const raw = `${getVoicePreference(personaId)}|${chunk}`;
+  const speed = getSpeedPreference();
+  // 1x keeps the original key format so audio cached before speed control
+  // existed is still reused (no re-billing).
+  const raw =
+    speed === 1
+      ? `${getVoicePreference(personaId)}|${chunk}`
+      : `${getVoicePreference(personaId)}|x${speed}|${chunk}`;
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(raw)
@@ -176,6 +182,7 @@ async function fetchChunkAudio(
           text: chunk,
           personaId,
           voice: getVoicePreference(personaId),
+          speed: getSpeedPreference(),
         }),
       });
       if (cancelled()) return null;
@@ -507,6 +514,25 @@ export function getVoicePreference(personaId: string): string {
 export function setVoicePreference(personaId: string, voiceId: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(voiceKey(personaId), voiceId);
+}
+
+/* Playback speed, relative to Adrian's normal pace. Applied by Cloud TTS at
+   synthesis time (natural pitch), so each speed is cached separately. */
+export const SPEED_OPTIONS = [1, 1.25, 1.5] as const;
+export type SpeedOption = (typeof SPEED_OPTIONS)[number];
+const SPEED_KEY = "myaibuddy_speed";
+
+export function getSpeedPreference(): SpeedOption {
+  if (typeof window === "undefined") return 1;
+  const stored = Number(localStorage.getItem(SPEED_KEY));
+  return (SPEED_OPTIONS as readonly number[]).includes(stored)
+    ? (stored as SpeedOption)
+    : 1;
+}
+
+export function setSpeedPreference(speed: SpeedOption): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(SPEED_KEY, String(speed));
 }
 
 export function recognitionLangFromMode(

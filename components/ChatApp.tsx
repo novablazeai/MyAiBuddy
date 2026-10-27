@@ -16,6 +16,10 @@ import {
   getVoiceModePreference,
   getVoicePreference,
   playMessage as playMessageAudio,
+  getSpeedPreference,
+  setSpeedPreference,
+  SPEED_OPTIONS,
+  type SpeedOption,
   setVoiceModePreference,
   setVoicePreference,
   stopPlayback as stopPlayerPlayback,
@@ -80,6 +84,16 @@ export default function ChatApp() {
     setVoicePersonaId(activeConversation.personaId);
     setVoiceId(getVoicePreference(activeConversation.personaId));
   }
+  const [speed, setSpeed] = useState<SpeedOption>(getSpeedPreference);
+  const handleCycleSpeed = useCallback(() => {
+    setSpeed((prev) => {
+      const i = SPEED_OPTIONS.indexOf(prev);
+      const next = SPEED_OPTIONS[(i + 1) % SPEED_OPTIONS.length];
+      setSpeedPreference(next);
+      return next;
+    });
+    stopPlayerPlayback(); // next play is synthesized at the new speed
+  }, []);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const playerStatus = useAudioPlayerStatus();
   const isSpeaking =
@@ -510,6 +524,8 @@ export default function ChatApp() {
             voiceId={voiceId}
             voiceOptions={PERSONA_VOICE_OPTIONS[persona.id] ?? PERSONA_VOICE_OPTIONS.adrian}
             onSelectVoice={handleSelectVoice}
+            speed={speed}
+            onCycleSpeed={handleCycleSpeed}
             onSend={handleSend}
             onReplay={handleReplay}
             onToggleVoiceMode={handleToggleVoiceMode}

@@ -31,6 +31,8 @@ interface ChatWindowProps {
   voiceId: string;
   voiceOptions: VoiceOption[];
   onSelectVoice: (id: string) => void;
+  speed: number;
+  onCycleSpeed: () => void;
 }
 
 function TypingIndicator({ accentHex }: { accentHex: string }) {
@@ -74,6 +76,8 @@ export default function ChatWindow({
   voiceId,
   voiceOptions,
   onSelectVoice,
+  speed,
+  onCycleSpeed,
 }: ChatWindowProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -213,6 +217,15 @@ export default function ChatWindow({
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={onCycleSpeed}
+            className="min-w-[3.25rem] rounded-full border border-white/80 bg-white/70 px-2.5 py-1.5 text-xs font-semibold tabular-nums text-slate-600 transition hover:bg-white/90"
+            title="Speaking speed (tap to change: 1x / 1.25x / 1.5x)"
+            aria-label={`Speaking speed ${speed}x, tap to change`}
+          >
+            {speed}x
+          </button>
           <button
             type="button"
             onClick={onToggleVoiceMode}

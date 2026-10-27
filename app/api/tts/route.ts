@@ -6,7 +6,9 @@ export const preferredRegion = "hkg1";
 
 // Native Cloud TTS controls (no pitch distortion). Faster + louder so Adrian
 // sounds lively rather than slow and quiet.
+// This is Adrian's "1x". The in-app speed control multiplies it.
 const SPEAKING_RATE = 1.25;
+const ALLOWED_SPEEDS = new Set([1, 1.25, 1.5]);
 const VOLUME_GAIN_DB = 6.0;
 
 // Any CJK character means the reply is Cantonese (the chat model is prompted to
@@ -35,7 +37,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { text, personaId, voice } = await req.json();
+    const { text, personaId, voice, speed } = await req.json();
+    const speedFactor = ALLOWED_SPEEDS.has(Number(speed)) ? Number(speed) : 1;
     if (!text?.trim()) {
       return new Response("Missing text", { status: 400 });
     }
@@ -55,7 +58,7 @@ export async function POST(req: NextRequest) {
           voice: { languageCode, name: voiceName },
           audioConfig: {
             audioEncoding: "MP3",
-            speakingRate: SPEAKING_RATE,
+            speakingRate: SPEAKING_RATE * speedFactor,
             volumeGainDb: VOLUME_GAIN_DB,
           },
         }),
